@@ -18,7 +18,12 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // `prompt` means the service worker does NOT auto-activate when a
+      // new build lands — the app surfaces an "Update available, reload?"
+      // toast and only swaps versions when the user confirms. This keeps
+      // the workshop tablet running a known-good build until the sawyer
+      // is between logs and happy to update.
+      registerType: 'prompt',
       includeAssets: ['favicon.svg'],
       manifest: {
         name: 'Sawmill Planner',
@@ -40,7 +45,11 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico}']
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
+        // Default is 2 MiB. We bump to 5 MiB so future growth (bigger
+        // icons, extra fonts, more images in the help modal) doesn't
+        // silently drop files from the precache manifest.
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
       }
     })
   ],

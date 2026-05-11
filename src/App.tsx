@@ -6,6 +6,7 @@ import { EndView } from './components/EndView';
 import { HelpModal } from './components/HelpModal';
 import { LogForm } from './components/LogForm';
 import { PriorityList } from './components/PriorityList';
+import { PwaStatus } from './components/PwaStatus';
 import { SettingsForm } from './components/SettingsForm';
 import { SplashScreen, useSplashState } from './components/SplashScreen';
 import { Summary } from './components/Summary';
@@ -180,6 +181,11 @@ export default function App() {
         <SplashScreen onDismiss={dismissSplash} onShowHelp={openHelp} />
       )}
       {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
+
+      {/* Service-worker lifecycle toasts (offline-ready, update-available).
+          Invisible until the SW fires the relevant event, so there's no
+          cost to mounting it unconditionally. */}
+      <PwaStatus />
     </div>
   );
 }
