@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { computeLayout } from '../core/layout';
 import { circlePolygon, clipHalfPlane } from '../core/geometry';
-import { buttLowering, designDiameter } from '../core/taper';
+import { rootLowering, designDiameter } from '../core/taper';
 import { initialPlan, loadPlan, savePlan } from '../core/storage';
 import type {
   Cut,
@@ -46,8 +46,8 @@ export interface BladeReadout {
 }
 
 export interface ConeState {
-  /** Drop to apply to butt (mm) while cone is still active, 0 when resolved. */
-  buttDropMm: number;
+  /** Drop to apply to the root-side support (mm) while cone is still active, 0 when resolved. */
+  rootDropMm: number;
   /** True once two cuts 180° apart have been committed. */
   resolved: boolean;
 }
@@ -177,7 +177,7 @@ export function usePlan(): UsePlan {
     setHistoryVersion((v) => v + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    plan.log.buttSideDiameter,
+    plan.log.rootSideDiameter,
     plan.log.topSideDiameter,
     plan.log.supportInset,
     plan.log.length,
@@ -444,7 +444,8 @@ export function usePlan(): UsePlan {
 
   /**
    * Cone detection: resolved once two committed cuts differ in rotation by
-   * 180° (±1°). Until then, the sawyer should compensate by dropping the butt.
+   * 180° (±1°). Until then, the sawyer should compensate by lowering the
+   * root-side support.
    */
   const cone = useMemo<ConeState>(() => {
     const angles = plan.cuts.map((c) => ((c.rotationDeg % 360) + 360) % 360);
@@ -456,11 +457,11 @@ export function usePlan(): UsePlan {
         if (Math.abs(minDiff - 180) <= 1) resolved = true;
       }
     }
-    const drop = resolved ? 0 : buttLowering(plan.log);
-    return { resolved, buttDropMm: drop };
+    const drop = resolved ? 0 : rootLowering(plan.log);
+    return { resolved, rootDropMm: drop };
   }, [
     plan.cuts,
-    plan.log.buttSideDiameter,
+    plan.log.rootSideDiameter,
     plan.log.topSideDiameter,
     plan.log.supportInset,
     plan.log.length

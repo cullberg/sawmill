@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buttEndDiameter,
-  buttLowering,
+  rootEndDiameter,
+  rootLowering,
   designDiameter,
   diameterAt,
   logVolumeM3,
@@ -12,13 +12,13 @@ import {
 import type { LogInput } from './types';
 
 // Supports sit 1250 mm from each end on a 5000 mm log → 2500 mm apart.
-// Butt-side support Ø = 400, top-side support Ø = 350.
+// Root-side support Ø = 400, top-side support Ø = 350.
 // Taper = 50 mm / 2.5 m = 20 mm/m.
 // Extrapolated end diameters:
-//   butt end (z=0):    400 + 20*1.25 = 425 mm
-//   top end (z=5000):  350 - 20*1.25 = 325 mm
+//   root end (z=0):    400 + 20*1.25 = 425 mm
+//   top end  (z=5000): 350 - 20*1.25 = 325 mm
 const sample: LogInput = {
-  buttSideDiameter: 400,
+  rootSideDiameter: 400,
   topSideDiameter: 350,
   supportInset: 1250,
   length: 5000,
@@ -40,7 +40,7 @@ describe('taper math', () => {
   });
 
   it('extrapolates to the log ends', () => {
-    expect(buttEndDiameter(sample)).toBeCloseTo(425, 6);
+    expect(rootEndDiameter(sample)).toBeCloseTo(425, 6);
     expect(topEndDiameter(sample)).toBeCloseTo(325, 6);
   });
 
@@ -53,15 +53,16 @@ describe('taper math', () => {
     expect(designDiameter(sample)).toBeCloseTo(325, 6);
   });
 
-  it('butt-lowering is half the diameter difference at the ends', () => {
-    // (425 - 325) / 2 = 50
-    expect(buttLowering(sample)).toBeCloseTo(50, 6);
+  it('root-lowering is half the diameter difference at the supports', () => {
+    // Directly from the two support measurements: (400 - 350) / 2 = 25
+    // (This is what the sawyer shims the root-side support down by.)
+    expect(rootLowering(sample)).toBeCloseTo(25, 6);
   });
 
   it('handles parallel logs (no taper)', () => {
     const even: LogInput = { ...sample, topSideDiameter: 400 };
     expect(taperPerMetre(even)).toBe(0);
-    expect(buttLowering(even)).toBe(0);
+    expect(rootLowering(even)).toBe(0);
     expect(designDiameter(even)).toBeCloseTo(400, 6);
   });
 

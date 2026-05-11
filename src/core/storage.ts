@@ -1,9 +1,9 @@
 import type { LogInput, MillSettings, PlanState, PlankSpec } from './types';
 
-const STORAGE_KEY = 'sawmill.plan.v12';
+const STORAGE_KEY = 'sawmill.plan.v13';
 
 export const defaultLog: LogInput = {
-  buttSideDiameter: 400,
+  rootSideDiameter: 400,
   topSideDiameter: 350,
   supportInset: 1250,
   length: 5000,

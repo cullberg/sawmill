@@ -1,4 +1,4 @@
-import { buttEndDiameter, designDiameter } from '../core/taper';
+import { rootEndDiameter, designDiameter } from '../core/taper';
 import type { PlacedPlank, PlanState, Vec2 } from '../core/types';
 import type { BladeReadout } from '../state/usePlan';
 
@@ -22,14 +22,14 @@ interface Props {
  */
 export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
   const dTop = designDiameter(plan.log);
-  const dButt = buttEndDiameter(plan.log);
-  const maxD = Math.max(dTop, dButt);
+  const dRoot = rootEndDiameter(plan.log);
+  const maxD = Math.max(dTop, dRoot);
   const pad = 36;
   const scale = (size - pad * 2) / maxD;
 
   const cx = size / 2;
   const cy = size / 2;
-  const rButt = (dButt / 2) * scale;
+  const rRoot = (dRoot / 2) * scale;
   const rTop = (dTop / 2) * scale;
   const bark = plan.settings.barkThickness * scale;
   const kerfPx = plan.settings.kerf * scale;
@@ -85,11 +85,11 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
           </mask>
         </defs>
 
-        {/* Butt-end reference circle (faded backdrop for taper context) */}
+        {/* Root-end reference circle (faded backdrop for taper context) */}
         <circle
           cx={cx}
           cy={cy}
-          r={rButt}
+          r={rRoot}
           fill="#f6e8d8"
           stroke="#81532b"
           strokeWidth={1.2}
@@ -281,12 +281,12 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
             x1={0}
             y1={0}
             x2={0}
-            y2={-rButt - 6}
+            y2={-rRoot - 6}
             stroke="#1a5ca8"
             strokeWidth={2}
             strokeLinecap="round"
           />
-          <text x={0} y={-rButt - 12} textAnchor="middle" fontSize={12} fill="#1a5ca8">
+          <text x={0} y={-rRoot - 12} textAnchor="middle" fontSize={12} fill="#1a5ca8">
             top {rotation.toFixed(0)}°
           </text>
         </g>

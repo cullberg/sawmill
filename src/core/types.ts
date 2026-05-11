@@ -5,10 +5,10 @@ export type Species = 'pine' | 'spruce' | 'birch';
 
 export interface LogInput {
   /**
-   * Diameter measured at the butt-side support (mm). The support sits at
-   * `supportInset` from the butt end of the log.
+   * Diameter measured at the root-side support (mm). The support sits at
+   * `supportInset` from the root end of the log (the wider, tree-base end).
    */
-  buttSideDiameter: number;
+  rootSideDiameter: number;
   /**
    * Diameter measured at the top-side support (mm). The support sits at
    * `supportInset` from the top end of the log.

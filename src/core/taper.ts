@@ -10,31 +10,31 @@ export function supportGap(log: LogInput): number {
 
 /**
  * Taper per metre of log length (mm/m).
- * Positive value means the butt is wider than the top.
+ * Positive value means the root is wider than the top.
  */
 export function taperPerMetre(log: LogInput): number {
   const gap = supportGap(log);
   if (gap <= 0) return 0;
-  return ((log.buttSideDiameter - log.topSideDiameter) * 1000) / gap;
+  return ((log.rootSideDiameter - log.topSideDiameter) * 1000) / gap;
 }
 
 /**
- * Diameter of the log at a distance `z` mm from the butt end.
+ * Diameter of the log at a distance `z` mm from the root end.
  * Assumes linear taper extrapolated from the two support measurements.
  * Clamps to >= 0.
  */
-export function diameterAt(log: LogInput, zFromButt: number): number {
-  // At z = supportInset, diameter = buttSideDiameter.
+export function diameterAt(log: LogInput, zFromRoot: number): number {
+  // At z = supportInset, diameter = rootSideDiameter.
   // Slope per mm = -(taperPerMetre)/1000 (y decreases as z grows).
   const t = taperPerMetre(log);
-  const d = log.buttSideDiameter - (t * (zFromButt - log.supportInset)) / 1000;
+  const d = log.rootSideDiameter - (t * (zFromRoot - log.supportInset)) / 1000;
   return Math.max(0, d);
 }
 
 /**
- * Diameter at the butt end (z = 0).
+ * Diameter at the root end (z = 0).
  */
-export function buttEndDiameter(log: LogInput): number {
+export function rootEndDiameter(log: LogInput): number {
   return diameterAt(log, 0);
 }
 
@@ -51,28 +51,34 @@ export function topEndDiameter(log: LogInput): number {
  * far end (top end).
  */
 export function designDiameter(log: LogInput): number {
-  const a = buttEndDiameter(log);
+  const a = rootEndDiameter(log);
   const b = topEndDiameter(log);
   return Math.min(a, b);
 }
 
 /**
- * How much the butt end must be lowered (or the top raised) so the pith line
- * lies horizontal, putting the first cut parallel to the pith rather than the
- * bark. Equivalent to half the difference of the two END diameters, computed
- * by extrapolating the support measurements to the log ends.
+ * How much the root-side support must be lowered (or the top-side support
+ * raised) so the pith line lies horizontal BETWEEN THE SUPPORTS, putting
+ * the first cut parallel to the pith rather than the bark.
+ *
+ * This is a direct reading off the two diameters the sawyer actually
+ * measured at the supports — no extrapolation to the log ends. Physically,
+ * you shim the root-side support down (or raise the top side) by this
+ * amount.
+ *
+ * Clamps to >= 0: if the root-side support measures smaller than the top
+ * support (inverse taper at the root flare), no lowering is needed on the
+ * root side.
  */
-export function buttLowering(log: LogInput): number {
-  const dButt = buttEndDiameter(log);
-  const dTop = topEndDiameter(log);
-  return Math.max(0, (dButt - dTop) / 2);
+export function rootLowering(log: LogInput): number {
+  return Math.max(0, (log.rootSideDiameter - log.topSideDiameter) / 2);
 }
 
 /**
  * Volume estimate of the log using the frustum-of-a-cone formula, in m^3.
  */
 export function logVolumeM3(log: LogInput): number {
-  const r1 = buttEndDiameter(log) / 2 / 1000;
+  const r1 = rootEndDiameter(log) / 2 / 1000;
   const r2 = topEndDiameter(log) / 2 / 1000;
   const h = log.length / 1000;
   return (Math.PI * h * (r1 * r1 + r1 * r2 + r2 * r2)) / 3;

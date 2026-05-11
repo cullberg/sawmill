@@ -1,4 +1,4 @@
-import { buttEndDiameter, topEndDiameter } from '../core/taper';
+import { rootEndDiameter, topEndDiameter } from '../core/taper';
 import type { LogInput, Species } from '../core/types';
 
 interface Props {
@@ -13,7 +13,7 @@ export function LogForm({ log, onChange }: Props) {
     onChange({ ...log, [key]: value });
   };
 
-  const butt = buttEndDiameter(log);
+  const root = rootEndDiameter(log);
   const top = topEndDiameter(log);
 
   /**
@@ -30,15 +30,20 @@ export function LogForm({ log, onChange }: Props) {
     onChange({ ...log, supportInset: inset });
   };
   /**
-   * When length changes we preserve the current spacing by recomputing the
-   * inset. If the new length is smaller than the current spacing we clamp
-   * spacing to the new length (inset → 0).
+   * Changing the log length does NOT touch `supportInset`. Historically
+   * this handler recomputed the inset to preserve the current spacing,
+   * but that clobbered the user's support-spacing input as they typed
+   * the length digit-by-digit (e.g. going 5 → 50 → 500 would first push
+   * spacing down to 5 mm on the first keystroke). The physically stable
+   * quantity to keep across a length edit is the inset — how far each
+   * support sits in from the nearest end — not the spacing.
+   *
+   * If the new length ends up smaller than 2×inset the spacing goes
+   * negative; we surface that as a warning in the `hint` below rather
+   * than silently correcting it.
    */
   const updateLength = (newLengthMm: number) => {
-    const length = Math.max(0, newLengthMm);
-    const clampedSpacing = Math.min(spacingMm, length);
-    const inset = Math.round((length - clampedSpacing) / 2);
-    onChange({ ...log, length, supportInset: inset });
+    onChange({ ...log, length: Math.max(0, newLengthMm) });
   };
 
   const spacingInvalid = spacingMm <= 0;
@@ -56,9 +61,9 @@ export function LogForm({ log, onChange }: Props) {
             and blade height remain in mm; we convert at the UI boundary and
             round to whole mm on write to avoid floating-point drift. */}
         <CmField
-          label="Butt-side Ø at support (cm)"
-          valueMm={log.buttSideDiameter}
-          onChangeMm={(v) => update('buttSideDiameter', v)}
+          label="Root-side Ø at support (cm)"
+          valueMm={log.rootSideDiameter}
+          onChangeMm={(v) => update('rootSideDiameter', v)}
         />
         <CmField
           label="Top-side Ø at support (cm)"
@@ -95,7 +100,7 @@ export function LogForm({ log, onChange }: Props) {
         <span className="tabular-nums">
           {spacingInvalid
             ? 'need support spacing > 0'
-            : `butt ${(butt / 10).toFixed(1)} cm · top ${(top / 10).toFixed(1)} cm`}
+            : `root ${(root / 10).toFixed(1)} cm · top ${(top / 10).toFixed(1)} cm`}
         </span>
       </div>
       <label className="block text-sm">

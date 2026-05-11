@@ -1,4 +1,4 @@
-import { buttEndDiameter, designDiameter, logVolumeM3, taperPerMetre } from '../core/taper';
+import { rootEndDiameter, designDiameter, logVolumeM3, taperPerMetre } from '../core/taper';
 import type { PlanState } from '../core/types';
 
 interface Props {
@@ -7,7 +7,7 @@ interface Props {
 
 export function Summary({ plan }: Props) {
   const taper = taperPerMetre(plan.log);
-  const butt = buttEndDiameter(plan.log);
+  const root = rootEndDiameter(plan.log);
   const top = designDiameter(plan.log);
   const vol = logVolumeM3(plan.log);
 
@@ -34,8 +34,8 @@ export function Summary({ plan }: Props) {
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
         <dt className="text-stone-500">Taper</dt>
         <dd className="tabular-nums">{taper.toFixed(1)} mm/m</dd>
-        <dt className="text-stone-500">Butt Ø</dt>
-        <dd className="tabular-nums">{(butt / 10).toFixed(1)} cm</dd>
+        <dt className="text-stone-500">Root Ø</dt>
+        <dd className="tabular-nums">{(root / 10).toFixed(1)} cm</dd>
         <dt className="text-stone-500">Top Ø (design)</dt>
         <dd className="tabular-nums">{(top / 10).toFixed(1)} cm</dd>
         <dt className="text-stone-500">Volume</dt>

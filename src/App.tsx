@@ -52,7 +52,7 @@ export default function App() {
   const defaultOpen = isLarge;
 
   // All log measurements display in cm to match the LogForm input units.
-  const logSummary = `Ø ${(plan.log.buttSideDiameter / 10).toFixed(1)}/${(
+  const logSummary = `Ø ${(plan.log.rootSideDiameter / 10).toFixed(1)}/${(
     plan.log.topSideDiameter / 10
   ).toFixed(1)} cm · ${(plan.log.length / 10).toFixed(0)} cm`;
   const prioritySummary = `${plan.priorityList.filter((s) => s.enabled).length}/${
