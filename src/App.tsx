@@ -3,9 +3,11 @@ import { Collapsible } from './components/Collapsible';
 import { ConeBanner } from './components/ConeBanner';
 import { Controls } from './components/Controls';
 import { EndView } from './components/EndView';
+import { HelpModal } from './components/HelpModal';
 import { LogForm } from './components/LogForm';
 import { PriorityList } from './components/PriorityList';
 import { SettingsForm } from './components/SettingsForm';
+import { SplashScreen, useSplashState } from './components/SplashScreen';
 import { Summary } from './components/Summary';
 import { usePlan } from './state/usePlan';
 
@@ -51,6 +53,18 @@ export default function App() {
   const isLarge = useIsLargeScreen();
   const defaultOpen = isLarge;
 
+  // Splash appears on first visit (flag in localStorage); help is an
+  // on-demand modal reachable from the splash or the "?" button.
+  const [splashOpen, dismissSplash] = useSplashState();
+  const [helpOpen, setHelpOpen] = useState(false);
+  const openHelp = () => {
+    // If the splash is still showing when the user taps "How does it work?"
+    // we close it and open help instead — they don't need to see the
+    // splash again after reading the walkthrough.
+    dismissSplash();
+    setHelpOpen(true);
+  };
+
   // All log measurements display in cm to match the LogForm input units.
   const logSummary = `Ø ${(plan.log.rootSideDiameter / 10).toFixed(1)}/${(
     plan.log.topSideDiameter / 10
@@ -62,6 +76,19 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-steel-50 text-steel-900">
+      {/* Floating help button — always reachable without eating precious
+          vertical space in the main layout. `fixed` so it stays visible
+          when the user scrolls the long sidebar on small screens. */}
+      <button
+        type="button"
+        onClick={() => setHelpOpen(true)}
+        aria-label="Open help"
+        title="How does the planner work?"
+        className="fixed top-3 right-3 z-40 w-10 h-10 rounded-full bg-white shadow-md border border-steel-200 text-steel-700 hover:text-brand-600 hover:border-brand-300 font-bold text-lg flex items-center justify-center"
+      >
+        ?
+      </button>
+
       <main className="max-w-6xl mx-auto p-3 sm:p-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         {/* Primary column: log illustration + cut controls. First on every
             viewport so the operator's main working surface is never pushed
@@ -145,6 +172,14 @@ export default function App() {
       <footer className="max-w-6xl mx-auto p-4 text-xs text-stone-500">
         <p>Log measurements in cm, mill settings and plank dimensions in mm. Data is saved in your browser.</p>
       </footer>
+
+      {/* Overlays render last so they stack on top of the planner. Both
+          trap focus implicitly via their `autoFocus` / close buttons and
+          dismiss on Escape. */}
+      {splashOpen && (
+        <SplashScreen onDismiss={dismissSplash} onShowHelp={openHelp} />
+      )}
+      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }
