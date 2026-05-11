@@ -35,14 +35,8 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      # Tests and typecheck are best-effort: the repo currently has two
-      # pre-existing failures in core/layout and core/step which are unrelated
-      # to the UI. Don't block deploys on them — flip `continue-on-error` to
-      # `false` once those are fixed.
-      - name: Typecheck
-        run: npx tsc --noEmit
-        continue-on-error: true
-
+      # `npm run build` already runs `tsc -b && vite build`, so type errors
+      # will fail the build step directly — no separate typecheck needed.
       - name: Build
         run: npm run build
 

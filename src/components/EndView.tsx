@@ -1,5 +1,6 @@
 import { buttEndDiameter, designDiameter } from '../core/taper';
-import type { BladeReadout, PlacedPlank, PlanState, Vec2 } from '../core/types';
+import type { PlacedPlank, PlanState, Vec2 } from '../core/types';
+import type { BladeReadout } from '../state/usePlan';
 
 interface Props {
   plan: PlanState;

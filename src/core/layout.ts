@@ -61,29 +61,6 @@ export function rectFitsInCircle(
 }
 
 /**
- * Maximum rectangle height (thickness) of a given width that fits in a
- * circle of radius r, centred horizontally at cx, bottom edge at y = yBottom.
- * Returns the top y coordinate the rectangle can reach, or null if it does
- * not fit even at zero height.
- */
-function maxTopForRect(
-  cx: number,
-  width: number,
-  yBottom: number,
-  r: number
-): number | null {
-  const hx = width / 2;
-  // Each corner (cx±hx, y) must satisfy (cx±hx)^2 + y^2 <= r^2
-  const xMax = Math.max(Math.abs(cx - hx), Math.abs(cx + hx));
-  const r2 = r * r;
-  if (xMax * xMax > r2) return null;
-  const yLimit = Math.sqrt(r2 - xMax * xMax);
-  // The rectangle must sit between -yLimit and +yLimit; yBottom must be >= -yLimit.
-  if (yBottom > yLimit - EPS) return null;
-  return yLimit;
-}
-
-/**
  * Compute the auto-layout.
  *
  * All planks are placed with `width` along x and `thickness` along y.
