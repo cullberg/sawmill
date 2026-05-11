@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="10" fill="#3a444f"/>
+  <!-- galvanised steel top + bottom rails -->
+  <rect x="4" y="14" width="56" height="4" fill="#c8d0d8" stroke="#141920" stroke-width="0.5"/>
+  <rect x="4" y="46" width="56" height="4" fill="#c8d0d8" stroke="#141920" stroke-width="0.5"/>
+  <!-- wood log end -->
+  <circle cx="32" cy="32" r="14" fill="#fdf8f3" stroke="#23170b" stroke-width="1.5"/>
+  <circle cx="32" cy="32" r="10" fill="none" stroke="#81532b" stroke-width="0.8"/>
+  <circle cx="32" cy="32" r="5" fill="none" stroke="#81532b" stroke-width="0.8"/>
+  <!-- red blade cut -->
+  <rect x="4" y="25" width="56" height="2" fill="#e42313"/>
+</svg>

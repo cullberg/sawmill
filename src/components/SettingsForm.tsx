@@ -1,0 +1,73 @@
+import type { MillSettings } from '../core/types';
+
+interface Props {
+  settings: MillSettings;
+  onChange: (s: MillSettings) => void;
+}
+
+export function SettingsForm({ settings, onChange }: Props) {
+  const update = <K extends keyof MillSettings>(key: K, value: MillSettings[K]) => {
+    onChange({ ...settings, [key]: value });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Kerf (mm)">
+          <input
+            type="number"
+            step="0.5"
+            value={settings.kerf}
+            onChange={(e) => update('kerf', Number(e.target.value) || 0)}
+            className="w-full rounded-md border-stone-300 bg-stone-50 px-2 py-1.5 border"
+          />
+        </Field>
+        <Field label="Min slab (mm)">
+          <input
+            type="number"
+            value={settings.minSlab}
+            onChange={(e) => update('minSlab', Number(e.target.value) || 0)}
+            className="w-full rounded-md border-stone-300 bg-stone-50 px-2 py-1.5 border"
+          />
+        </Field>
+        <Field label="Edge clearance (mm)" hint="Extra inset from bark to avoid wane">
+          <input
+            type="number"
+            value={settings.edgeClearance}
+            onChange={(e) => update('edgeClearance', Number(e.target.value) || 0)}
+            className="w-full rounded-md border-stone-300 bg-stone-50 px-2 py-1.5 border"
+          />
+        </Field>
+        <Field label="Bark thickness (mm)" hint="Shown on uncut (round) sides">
+          <input
+            type="number"
+            value={settings.barkThickness}
+            onChange={(e) => update('barkThickness', Number(e.target.value) || 0)}
+            className="w-full rounded-md border-stone-300 bg-stone-50 px-2 py-1.5 border"
+          />
+        </Field>
+        <Field label="Strategy">
+          <select
+            value={settings.strategy}
+            onChange={(e) => update('strategy', e.target.value as MillSettings['strategy'])}
+            className="w-full rounded-md border-stone-300 bg-stone-50 px-2 py-1.5 border"
+          >
+            <option value="priority">Strict priority</option>
+            <option value="value">Maximize value</option>
+            <option value="min-waste">Minimize waste</option>
+          </select>
+        </Field>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <label className="block text-sm">
+      <span className="text-stone-600">{label}</span>
+      <div className="mt-1">{children}</div>
+      {hint && <span className="text-xs text-stone-500">{hint}</span>}
+    </label>
+  );
+}

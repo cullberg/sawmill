@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Better touch targets on mobile */
+@media (pointer: coarse) {
+  input[type='number'],
+  select,
+  button {
+    min-height: 40px;
+  }
+}
