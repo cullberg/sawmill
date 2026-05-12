@@ -8,15 +8,30 @@ import type { MillSettings, PlacedPlank, PlankSpec } from './types';
  * axis-aligned rectangles inside this circle at the current rotation.
  *
  * Layout strategy (cant sawing):
- *   1. Place the LARGEST prioritized plank (or the highest-value one) as
- *      a central cant running through the pith.
- *   2. Fill above and below the cant with a stack of planks from the
- *      priority list, largest-first, with kerf between them.
- *   3. Fill left and right side boards that can fit next to the cant,
- *      stacking from the cant outwards.
+ *   1. Pick a central cant spanning the pith. Which spec becomes the
+ *      cant depends on the Mill strategy:
+ *        - 'priority': the top-scoring spec whose larger side fits.
+ *        - 'value' / 'min-waste': every enabled spec is trialled as a
+ *          cant; the candidate whose whole-log layout scores best wins.
+ *   2. Fill a stack above and below the cant, greedy per slot, picking
+ *      the best (spec, orientation) pair that still fits.
+ *   3. Fill one side board per side (left / right) with its own stack.
  *
  * The layout is purely geometric; the sawyer then chooses the physical
  * order of cuts at runtime via the Rotate + Step controls.
+ *
+ * Weaknesses addressed in this revision (vs `layout.legacy.ts`):
+ *  - Orientation-aware scoring: each slot picks the best-fitting
+ *    (spec, orientation) rather than locking orientation in by spec.
+ *  - 'value' uses value DENSITY (value per mm²) so a high-value plank
+ *    that eats the whole slot can lose to several smaller planks that
+ *    together earn more per unit of log.
+ *  - 'min-waste' and 'value' try every candidate cant and keep the
+ *    layout that scores best; 'priority' keeps the old behaviour by
+ *    design (the user ranked specs for a reason — strict priority
+ *    must respect that).
+ *  - Dropped the dead area tiebreaker in strict-priority scoring
+ *    (specs have unique indices, so it never fired).
  */
 
 export interface LayoutInput {
@@ -63,9 +78,9 @@ export function rectFitsInCircle(
 /**
  * Compute the auto-layout.
  *
- * All planks are placed with `width` along x and `thickness` along y.
+ * All planks are placed as axis-aligned rectangles in the plan frame.
  * A plank spec may be used in either orientation (width×thickness or
- * thickness×width) at the optimizer's discretion when exploring fits.
+ * thickness×width); the slot-filler chooses whichever fits best.
  */
 export function computeLayout(input: LayoutInput): LayoutResult {
   const { designDiameterMm, settings, priority } = input;
@@ -74,41 +89,73 @@ export function computeLayout(input: LayoutInput): LayoutResult {
   const r = designDiameterMm / 2 - settings.edgeClearance - settings.barkThickness;
   const kerf = settings.kerf;
   const specs = priority.filter((p) => p.enabled);
-
   const totalArea = Math.PI * r * r;
-  const placed: PlacedPlank[] = [];
-  const counts: Record<string, number> = {};
 
   if (r <= 0 || specs.length === 0) {
-    return { planks: placed, counts, usedArea: 0, totalArea };
+    return { planks: [], counts: {}, usedArea: 0, totalArea };
   }
 
   const maxCountOf = (spec: PlankSpec) => spec.maxCount ?? Number.POSITIVE_INFINITY;
-  const canPlace = (specId: string): boolean => {
-    const spec = specs.find((s) => s.id === specId);
-    if (!spec) return false;
-    return (counts[specId] ?? 0) < maxCountOf(spec);
-  };
 
-  const score = (spec: PlankSpec): number => {
+  /**
+   * Strategy-specific score for a spec. Orientation is handled by the
+   * caller (see the slot-filler), because for 'min-waste' the slot's
+   * actual plank area matters more than the spec's nominal area.
+   *
+   * 'priority': tier number × 1e6 dominates everything. No area
+   * tiebreaker — specs are unique in the priority list so the
+   * tiebreaker from the legacy version never fired.
+   *
+   * 'value': absolute spec value (falls back to cross-section area
+   * when the user hasn't filled in a `value`), minus a tiny anti-
+   * repeat term so equal-value specs take turns instead of one
+   * hogging every slot. Absolute (not per-mm²) because density
+   * greedy-fills tend to pack many small planks that, in total, earn
+   * less than one big plank — an artefact of the rigid cant-saw
+   * geometry we use. See the `value @ 500mm` regression reproducer
+   * in layout.test.ts for the failure mode.
+   *
+   * 'min-waste': raw area. Biggest plank wins; ties broken downstream
+   * by the slot-filler's orientation preference.
+   */
+  const scoreSpec = (spec: PlankSpec, counts: Record<string, number>): number => {
     switch (settings.strategy) {
-      case 'value':
-        return (spec.value ?? spec.width * spec.thickness) - (counts[spec.id] ?? 0) * 1e-3;
+      case 'value': {
+        const raw = spec.value ?? spec.width * spec.thickness;
+        return raw - (counts[spec.id] ?? 0) * 1e-3;
+      }
       case 'min-waste':
         return spec.width * spec.thickness;
       case 'priority':
       default:
-        // Earlier in the list = higher score; but prefer larger within the same tier.
-        return (specs.length - specs.indexOf(spec)) * 1e6 + spec.width * spec.thickness;
+        return (specs.length - specs.indexOf(spec)) * 1e6;
     }
   };
 
   /**
-   * Try to place a horizontal stack of planks starting from yStart going
-   * in direction +1 (up) or -1 (down), constrained to fit inside the circle.
-   * Planks are chosen greedily from the priority list, respecting counts.
+   * Trial layout for a given cant choice. `counts` is passed in so
+   * maxCount constraints accumulate across one trial but reset
+   * between trials.
+   */
+  interface Trial {
+    planks: PlacedPlank[];
+    counts: Record<string, number>;
+    cantSpec: PlankSpec;
+    cantSize: { w: number; h: number };
+  }
+
+  /**
+   * Greedy slot filler used for both the main stack above/below the
+   * cant and for the side-board corridors. Walks from `yStart` in
+   * `direction` placing the best-fitting (spec, orientation) pair at
+   * each step. Respects an optional `xHalfLimit` so side-board stacks
+   * can't ooze back into the central column.
+   *
+   * Returns the updated sequence counter.
    */
   const fillStack = (
+    placed: PlacedPlank[],
+    counts: Record<string, number>,
     cx: number,
     yStart: number,
     direction: 1 | -1,
@@ -119,141 +166,248 @@ export function computeLayout(input: LayoutInput): LayoutResult {
     let seq = sequenceStart;
     // eslint-disable-next-line no-constant-condition
     while (true) {
-      // Pick the best spec that still fits.
-      const candidates = [...specs].sort((a, b) => score(b) - score(a));
-      let placedOne = false;
-      for (const spec of candidates) {
-        if (!canPlace(spec.id)) continue;
-        // Try both orientations (width×thickness) and (thickness×width).
-        const orientations: Array<{ w: number; h: number }> = [
-          { w: spec.width, h: spec.thickness },
-          { w: spec.thickness, h: spec.width }
-        ];
-        // If width exactly equals thickness we'd duplicate; unique them.
-        if (spec.width === spec.thickness) orientations.pop();
-
+      // Build every (spec, orientation) that still fits this slot, then
+      // pick the one with the highest score. This is the orientation-
+      // aware scoring fix: we no longer lock orientation based on spec
+      // identity — if the slot favours portrait over landscape for the
+      // same spec, we pick portrait.
+      type Candidate = {
+        spec: PlankSpec;
+        w: number;
+        h: number;
+        score: number;
+      };
+      const candidates: Candidate[] = [];
+      for (const spec of specs) {
+        if ((counts[spec.id] ?? 0) >= maxCountOf(spec)) continue;
+        const orientations: Array<{ w: number; h: number }> =
+          spec.width === spec.thickness
+            ? [{ w: spec.width, h: spec.thickness }]
+            : [
+                { w: spec.width, h: spec.thickness },
+                { w: spec.thickness, h: spec.width }
+              ];
         for (const { w, h } of orientations) {
           if (xHalfLimit !== null && w / 2 > xHalfLimit + EPS) continue;
           const rectBottom = direction === 1 ? y : y - h;
           const rectTop = rectBottom + h;
-          // Check fit inside circle at x = cx.
           if (!rectFitsInCircle(cx, (rectBottom + rectTop) / 2, w, h, r)) continue;
-          // Place it.
-          seq += 1;
-          placed.push({
-            specId: spec.id,
-            x: cx,
-            y: (rectBottom + rectTop) / 2,
-            width: w,
-            thickness: h,
-            sequence: seq,
-            label: `${spec.width}×${spec.thickness}`
-          });
-          counts[spec.id] = (counts[spec.id] ?? 0) + 1;
-          y = direction === 1 ? rectTop + kerf : rectBottom - kerf;
-          placedOne = true;
-          break;
+          candidates.push({ spec, w, h, score: scoreSpec(spec, counts) });
         }
-        if (placedOne) break;
       }
-      if (!placedOne) break;
+      if (candidates.length === 0) break;
+      // Highest score wins. When tied, prefer the orientation whose
+      // larger dimension aligns with the slot's long axis (= x here):
+      // that keeps the plank flat in the stack and tends to use the
+      // slot better.
+      candidates.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        // Secondary: larger area wins (relevant for min-waste ties).
+        const aArea = a.w * a.h;
+        const bArea = b.w * b.h;
+        if (bArea !== aArea) return bArea - aArea;
+        // Tertiary: prefer landscape (w >= h).
+        return Number(b.w >= b.h) - Number(a.w >= a.h);
+      });
+      const pick = candidates[0];
+      const rectBottom = direction === 1 ? y : y - pick.h;
+      const rectTop = rectBottom + pick.h;
+      seq += 1;
+      placed.push({
+        specId: pick.spec.id,
+        x: cx,
+        y: (rectBottom + rectTop) / 2,
+        width: pick.w,
+        thickness: pick.h,
+        sequence: seq,
+        label: `${pick.spec.width}×${pick.spec.thickness}`
+      });
+      counts[pick.spec.id] = (counts[pick.spec.id] ?? 0) + 1;
+      y = direction === 1 ? rectTop + kerf : rectBottom - kerf;
     }
     return seq;
   };
 
-  // Step 1. Choose the best "central cant" from the priority list. This is the
-  // top-scoring spec whose LARGER dimension can still fit horizontally inside
-  // the circle (so that its width spans across the pith).
-  const centreCandidates = specs
-    .filter((s) => canPlace(s.id))
-    .sort((a, b) => score(b) - score(a));
+  /**
+   * Side-board filler: places one anchor plank centred vertically at
+   * cx = sign·(cantHalfWidth + kerf + anchorHalfWidth), then stacks
+   * above and below it within the same corridor. Anchor is chosen as
+   * the widest spec that fits into the remaining corridor width; this
+   * is a small but noticeable improvement on the legacy version,
+   * which picked the first spec in score order even if a wider spec
+   * would have covered more corridor.
+   */
+  const trySide = (
+    placed: PlacedPlank[],
+    counts: Record<string, number>,
+    cantHalfWidth: number,
+    sign: 1 | -1,
+    sequence: number
+  ): number => {
+    if (cantHalfWidth === 0) return sequence;
+    const xInner = cantHalfWidth + kerf;
+    const corridorWidth = r - xInner;
+    if (corridorWidth <= 0) return sequence;
 
-  let sequence = 0;
-  let cantHalfWidth = 0;
-  let cantTop = 0;
-  let cantBottom = 0;
-
-  for (const spec of centreCandidates) {
-    const orientations: Array<{ w: number; h: number }> = [
-      { w: Math.max(spec.width, spec.thickness), h: Math.min(spec.width, spec.thickness) },
-      { w: Math.min(spec.width, spec.thickness), h: Math.max(spec.width, spec.thickness) }
-    ];
-    let chosen: { w: number; h: number } | null = null;
-    for (const o of orientations) {
-      if (rectFitsInCircle(0, 0, o.w, o.h, r)) {
-        chosen = o;
-        break;
+    type Candidate = { spec: PlankSpec; w: number; h: number; score: number };
+    const candidates: Candidate[] = [];
+    for (const spec of specs) {
+      if ((counts[spec.id] ?? 0) >= maxCountOf(spec)) continue;
+      const orientations: Array<{ w: number; h: number }> =
+        spec.width === spec.thickness
+          ? [{ w: spec.width, h: spec.thickness }]
+          : [
+              { w: spec.thickness, h: spec.width },
+              { w: spec.width, h: spec.thickness }
+            ];
+      for (const { w, h } of orientations) {
+        if (w > corridorWidth + EPS) continue;
+        const cx = sign * (xInner + w / 2);
+        if (!rectFitsInCircle(cx, 0, w, h, r)) continue;
+        candidates.push({ spec, w, h, score: scoreSpec(spec, counts) });
       }
     }
-    if (!chosen) continue;
+    if (candidates.length === 0) return sequence;
+    candidates.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      // Prefer the orientation that best fills the corridor width:
+      // leaves less unused wood next to the circle's curve.
+      if (a.w !== b.w) return b.w - a.w;
+      const aArea = a.w * a.h;
+      const bArea = b.w * b.h;
+      return bArea - aArea;
+    });
+    const pick = candidates[0];
+    const cx = sign * (xInner + pick.w / 2);
     sequence += 1;
     placed.push({
-      specId: spec.id,
-      x: 0,
+      specId: pick.spec.id,
+      x: cx,
       y: 0,
-      width: chosen.w,
-      thickness: chosen.h,
+      width: pick.w,
+      thickness: pick.h,
       sequence,
-      label: `${spec.width}×${spec.thickness}`
+      label: `${pick.spec.width}×${pick.spec.thickness}`
     });
-    counts[spec.id] = (counts[spec.id] ?? 0) + 1;
-    cantHalfWidth = chosen.w / 2;
-    cantTop = chosen.h / 2;
-    cantBottom = -chosen.h / 2;
-    break;
-  }
-
-  // Step 2. Fill above and below the central cant.
-  sequence = fillStack(0, cantTop + kerf, 1, null, sequence);
-  sequence = fillStack(0, cantBottom - kerf, -1, null, sequence);
-
-  // Step 3. Side boards: try to place thin boards left and right of the cant.
-  // The side-board zone is a vertical strip from x = cantHalfWidth + kerf to r.
-  const trySide = (sign: 1 | -1) => {
-    if (cantHalfWidth === 0) return;
-    // Find the widest spec that fits as a side board.
-    const sideSpecs = [...specs].sort((a, b) => score(b) - score(a));
-    for (const spec of sideSpecs) {
-      const orientations: Array<{ w: number; h: number }> = [
-        { w: spec.thickness, h: spec.width },
-        { w: spec.width, h: spec.thickness }
-      ];
-      for (const o of orientations) {
-        if (!canPlace(spec.id)) break;
-        // Side board width (x) must fit between cant edge and circle edge at y=0.
-        const xInner = cantHalfWidth + kerf;
-        const xOuter = xInner + o.w;
-        if (xOuter > r) continue;
-        const cx = sign * (xInner + o.w / 2);
-        // Check that at this cx, the plank of height o.h fits vertically at y=0.
-        if (!rectFitsInCircle(cx, 0, o.w, o.h, r)) continue;
-        sequence += 1;
-        placed.push({
-          specId: spec.id,
-          x: cx,
-          y: 0,
-          width: o.w,
-          thickness: o.h,
-          sequence,
-          label: `${spec.width}×${spec.thickness}`
-        });
-        counts[spec.id] = (counts[spec.id] ?? 0) + 1;
-        // Stack above and below this side board. Stacked planks are
-        // centred at `cx` and must not extend back into the central
-        // column — their half-width is capped at the side board's own
-        // half-width so they stay inside the side-board corridor
-        // between `cantHalfWidth + kerf` and the circle edge.
-        const sideHalf = o.w / 2;
-        sequence = fillStack(cx, o.h / 2 + kerf, 1, sideHalf, sequence);
-        sequence = fillStack(cx, -o.h / 2 - kerf, -1, sideHalf, sequence);
-        return;
-      }
-    }
+    counts[pick.spec.id] = (counts[pick.spec.id] ?? 0) + 1;
+    const sideHalf = pick.w / 2;
+    sequence = fillStack(placed, counts, cx, pick.h / 2 + kerf, 1, sideHalf, sequence);
+    sequence = fillStack(placed, counts, cx, -pick.h / 2 - kerf, -1, sideHalf, sequence);
+    return sequence;
   };
 
-  trySide(1);
-  trySide(-1);
+  /**
+   * Full layout pipeline for one chosen cant candidate. Returns an
+   * independent Trial so the caller can compare candidates.
+   */
+  const layoutForCant = (cantSpec: PlankSpec, cantSize: { w: number; h: number }): Trial => {
+    const placed: PlacedPlank[] = [];
+    const counts: Record<string, number> = {};
+    // Place the cant first.
+    placed.push({
+      specId: cantSpec.id,
+      x: 0,
+      y: 0,
+      width: cantSize.w,
+      thickness: cantSize.h,
+      sequence: 1,
+      label: `${cantSpec.width}×${cantSpec.thickness}`
+    });
+    counts[cantSpec.id] = 1;
+    let sequence = 1;
+    const cantHalfWidth = cantSize.w / 2;
+    const cantTop = cantSize.h / 2;
+    const cantBottom = -cantSize.h / 2;
+    // Main stacks above and below the cant. The xHalfLimit caps stack
+    // plank widths at the cant's half-width so a wide stack plank
+    // can't leak past the cant's side edges into the side-board
+    // corridor — that was the source of the overlap bug with the
+    // 'value' and 'min-waste' strategies, where `try every cant`
+    // could pick a cant narrower than the best stack plank.
+    sequence = fillStack(placed, counts, 0, cantTop + kerf, 1, cantHalfWidth, sequence);
+    sequence = fillStack(placed, counts, 0, cantBottom - kerf, -1, cantHalfWidth, sequence);
+    // Side-board corridors.
+    sequence = trySide(placed, counts, cantHalfWidth, 1, sequence);
+    sequence = trySide(placed, counts, cantHalfWidth, -1, sequence);
+    return { planks: placed, counts, cantSpec, cantSize };
+  };
 
-  const usedArea = placed.reduce((acc, p) => acc + p.width * p.thickness, 0);
-  return { planks: placed, counts, usedArea, totalArea };
+  /**
+   * Enumerate viable cant candidates. Each spec gets up to two
+   * entries — landscape (long side horizontal) and portrait (long
+   * side vertical) — any that actually fit inside the usable circle
+   * at (0,0).
+   */
+  interface CantOption {
+    spec: PlankSpec;
+    size: { w: number; h: number };
+  }
+  const cantOptions: CantOption[] = [];
+  for (const spec of specs) {
+    const long = Math.max(spec.width, spec.thickness);
+    const short = Math.min(spec.width, spec.thickness);
+    const orientations: Array<{ w: number; h: number }> =
+      long === short
+        ? [{ w: long, h: long }]
+        : [
+            { w: long, h: short },
+            { w: short, h: long }
+          ];
+    for (const o of orientations) {
+      if (rectFitsInCircle(0, 0, o.w, o.h, r)) {
+        cantOptions.push({ spec, size: o });
+      }
+    }
+  }
+
+  if (cantOptions.length === 0) {
+    return { planks: [], counts: {}, usedArea: 0, totalArea };
+  }
+
+  /**
+   * Cant selection rule:
+   *  - 'priority': keep the legacy behaviour — the highest-priority
+   *    enabled spec that fits becomes the cant, in its landscape
+   *    orientation if possible. The user ranked specs on purpose;
+   *    strict-priority must honour that. Still upgrades to
+   *    orientation-aware slot-filling downstream.
+   *  - 'value' / 'min-waste': trial every candidate cant, keep the
+   *    layout whose TOTAL score is highest (value for 'value',
+   *    usedArea for 'min-waste'). This is the "try multiple cants"
+   *    improvement.
+   */
+  let winner: Trial;
+  if (settings.strategy === 'priority') {
+    // Pick the highest-priority cantOption; within a spec prefer
+    // landscape (first orientation we enumerated above).
+    const bestOption = cantOptions
+      .slice()
+      .sort((a, b) => specs.indexOf(a.spec) - specs.indexOf(b.spec))[0];
+    winner = layoutForCant(bestOption.spec, bestOption.size);
+  } else {
+    const trials = cantOptions.map((opt) => layoutForCant(opt.spec, opt.size));
+    const trialScore = (t: Trial): number => {
+      if (settings.strategy === 'value') {
+        let total = 0;
+        for (const p of t.planks) {
+          const spec = specs.find((s) => s.id === p.specId);
+          if (!spec) continue;
+          total += spec.value ?? p.width * p.thickness;
+        }
+        return total;
+      }
+      // 'min-waste' → usedArea
+      return t.planks.reduce((acc, p) => acc + p.width * p.thickness, 0);
+    };
+    trials.sort((a, b) => {
+      const diff = trialScore(b) - trialScore(a);
+      if (Math.abs(diff) > 1e-6) return diff;
+      // Tiebreaker: fewer planks = simpler cut sequence for the sawyer.
+      return a.planks.length - b.planks.length;
+    });
+    winner = trials[0];
+  }
+
+  const usedArea = winner.planks.reduce((acc, p) => acc + p.width * p.thickness, 0);
+  return { planks: winner.planks, counts: winner.counts, usedArea, totalArea };
 }
