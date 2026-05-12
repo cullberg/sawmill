@@ -1,4 +1,5 @@
 import { rootEndDiameter, designDiameter, logVolumeM3, taperPerMetre } from '../core/taper';
+import { toolName } from '../core/tool';
 import type { PlanState } from '../core/types';
 
 interface Props {
@@ -10,6 +11,7 @@ export function Summary({ plan }: Props) {
   const root = rootEndDiameter(plan.log);
   const top = designDiameter(plan.log);
   const vol = logVolumeM3(plan.log);
+  const tool = toolName(plan.settings);
 
   const totalPlankArea = plan.planks.reduce((a, p) => a + p.width * p.thickness, 0);
   const circleArea = Math.PI * Math.pow(top / 2, 2);
@@ -82,7 +84,7 @@ export function Summary({ plan }: Props) {
 
       {produced.size === 0 && (
         <p className="text-xs text-stone-500 italic">
-          No cuts yet. Set rotation, read blade height, make your cut on the mill,
+          No cuts yet. Set rotation, read {tool} height, make your cut on the mill,
           then tap ▼ Step cut to record it.
         </p>
       )}

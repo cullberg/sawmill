@@ -116,6 +116,7 @@ export default function App() {
             logComplete={logComplete}
             cutsCount={plan.cuts.length}
             producedCount={plan.produced.length}
+            toolLabel={plan.settings.cuttingTool}
           />
           {/* The log report is useful but not essential mid-cut — tuck it
               behind a collapsible on every viewport so it never steals focus
@@ -123,7 +124,7 @@ export default function App() {
           <Collapsible
             id="edging"
             title="Edging guide"
-            summary="Blade heights for the second-pass width trim"
+            summary={`${plan.settings.cuttingTool === 'chain' ? 'Chain' : 'Blade'} heights for the second-pass width trim`}
             defaultOpen={false}
             accent="brand"
           >

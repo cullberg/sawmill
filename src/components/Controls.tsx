@@ -19,6 +19,13 @@ interface Props {
   /** Counts shown in the completion celebration banner. */
   cutsCount: number;
   producedCount: number;
+  /**
+   * User-visible name of the cutting tool ("chain" or "blade"). Drives
+   * the readout labels so chainsaw-mill users see "Set chain height"
+   * while bandsaw users see "Set blade height". Internal prop names keep
+   * `blade*` for historical / code-simplicity reasons.
+   */
+  toolLabel: 'chain' | 'blade';
 }
 
 /**
@@ -46,7 +53,8 @@ export function Controls({
   bladeProducing,
   logComplete,
   cutsCount,
-  producedCount
+  producedCount,
+  toolLabel
 }: Props) {
   const kindLabel =
     bladeKind === 'plank'
@@ -124,7 +132,7 @@ export function Controls({
               }`}
             >
               <div className="text-[10px] uppercase tracking-wide text-stone-500">
-                Set blade height
+                Set {toolLabel} height
               </div>
               <div
                 className={`tabular-nums font-bold leading-none ${
@@ -133,7 +141,7 @@ export function Controls({
               >
                 {bladeValid ? `${bladeAboveBed.toFixed(0)} mm` : '—'}
               </div>
-              <div className="text-[10px] text-stone-500">from bed to blade</div>
+              <div className="text-[10px] text-stone-500">from bed to {toolLabel}</div>
             </div>
             <div
               className={`flex-1 rounded-lg px-3 py-2 text-xs flex flex-col justify-center ${

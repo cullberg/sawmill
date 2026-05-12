@@ -15,7 +15,8 @@ export const defaultSettings: MillSettings = {
   minSlab: 15,
   strategy: 'priority',
   edgeClearance: 5,
-  barkThickness: 10
+  barkThickness: 10,
+  cuttingTool: 'chain'
 };
 
 /**
@@ -132,6 +133,11 @@ export function loadPlan(): PlanState | null {
     const parsed = JSON.parse(raw) as PlanState;
     // Basic sanity check.
     if (!parsed.log || !parsed.settings || !Array.isArray(parsed.priorityList)) return null;
+    // Backfill any settings fields added since this plan was saved, so we
+    // don't force a full wipe (new storage key) every time a cosmetic
+    // field is added. Only cosmetic / default-safe fields belong here —
+    // anything that would change the math gets a new storage key bump.
+    parsed.settings = { ...defaultSettings, ...parsed.settings };
     return parsed;
   } catch {
     return null;

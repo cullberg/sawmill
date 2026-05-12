@@ -57,6 +57,21 @@ export function SettingsForm({ settings, onChange }: Props) {
             <option value="min-waste">Minimize waste</option>
           </select>
         </Field>
+        <Field
+          label="Cutting tool"
+          hint="Cosmetic only — label used in the UI for your saw"
+        >
+          <select
+            value={settings.cuttingTool}
+            onChange={(e) =>
+              update('cuttingTool', e.target.value as MillSettings['cuttingTool'])
+            }
+            className="w-full rounded-md border-stone-300 bg-stone-50 px-2 py-1.5 border"
+          >
+            <option value="chain">Chain (chainsaw mill)</option>
+            <option value="blade">Blade (bandsaw mill)</option>
+          </select>
+        </Field>
       </div>
     </div>
   );

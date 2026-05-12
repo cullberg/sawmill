@@ -37,6 +37,13 @@ export interface MillSettings {
   edgeClearance: number;
   /** Bark thickness assumed on the uncut (round) sides of the log, mm. */
   barkThickness: number;
+  /**
+   * What the cutting tool is called in the UI. `chain` (default) suits
+   * chainsaw mills; `blade` reads better for bandsaw mills. The choice
+   * is purely cosmetic — it doesn't change any math. Persisted so each
+   * mill keeps the term its sawyer prefers.
+   */
+  cuttingTool: 'chain' | 'blade';
 }
 
 export interface PlankSpec {

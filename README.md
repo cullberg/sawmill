@@ -17,10 +17,11 @@ and warm wood tones for the log illustration.
   not the bark. Turns neutral grey when no lowering is needed, then
   forest green ("cone resolved") once you have cut two reference faces
   180° apart.
-- **Bed-to-blade readout** — large numeric dimension of the blade height
-  above the lowest point of the current log shape. This is the number
-  you crank into the sawmill. Also drawn as a red dimension line on the
-  end-view illustration.
+- **Bed-to-saw readout** — large numeric dimension of the chain / blade
+  height above the lowest point of the current log shape. This is the
+  number you crank into the sawmill. Also drawn as a red dimension line
+  on the end-view illustration. Pick whether the UI says "chain" or
+  "blade" under Mill settings.
 - **Interactive step-cut workflow** — each ↓ Cut actually removes the
   slab above the blade, records which planks were produced, and updates
   the shape so the next blade reading is against the fresh surface.

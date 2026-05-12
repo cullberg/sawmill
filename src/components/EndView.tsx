@@ -1,4 +1,5 @@
 import { rootEndDiameter, designDiameter } from '../core/taper';
+import { toolName } from '../core/tool';
 import { computePlankTrim } from '../core/trim';
 import type { PlacedPlank, PlanState, Vec2 } from '../core/types';
 import type { BladeReadout } from '../state/usePlan';
@@ -291,18 +292,34 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
           bed
         </text>
 
-        {/* Blade line (lower edge of the blade / new shape top after the cut)
-            with the kerf band drawn ABOVE it — i.e. in the material that will
-            be removed as sawdust. */}
+        {/* Cutting tool (chain / blade) drawn at its actual kerf thickness.
+            The saw's lower edge is at `bladeSvgY` (= new shape top after
+            the cut); the upper edge sits `kerfPx` above that — together
+            they form a solid band covering the sawdust that will be
+            removed. Label adapts to the user's tool terminology. */}
         {blade.valid && (
           <>
+            {/* Solid fill inside the kerf — represents the physical tool
+                body. Slightly darker / more opaque than the old 0.15
+                wash so the saw reads as a real object in the scene. */}
             <rect
               x={pad / 2}
               y={bladeSvgY - kerfPx}
               width={size - pad}
               height={kerfPx}
               fill="#e42313"
-              opacity={0.15}
+              opacity={0.35}
+            />
+            {/* Thin outlines along the top and bottom edges of the band
+                sharpen the boundary so even a 2-mm kerf is visible. */}
+            <line
+              x1={pad / 2}
+              x2={size - pad / 2}
+              y1={bladeSvgY - kerfPx}
+              y2={bladeSvgY - kerfPx}
+              stroke="#991810"
+              strokeWidth={0.9}
+              opacity={0.7}
             />
             <line
               x1={pad / 2}
@@ -321,7 +338,7 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
               textAnchor="end"
               fill="#e42313"
             >
-              blade
+              {toolName(plan.settings)}
             </text>
 
             {/* Bed-to-blade dimension arrow on the left */}
@@ -389,7 +406,7 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
             style={{ backgroundColor: '#e42313' }}
             aria-hidden
           />
-          blade
+          {toolName(plan.settings)}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span

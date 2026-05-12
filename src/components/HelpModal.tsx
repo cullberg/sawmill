@@ -101,17 +101,22 @@ export function HelpModal({ onClose }: Props) {
 
           <Step n={4} title="Make the first cut">
             <p>
-              The big <b>Set blade height</b> readout shows the number you crank
-              into the mill — blade height above the bed, in mm. The yellow{' '}
-              <b>NEXT</b> pill on the right tells you whether it's a slab cut
-              (round waste) or a plank cut (named after the plank it will
-              produce).
+              The big <b>Set chain / blade height</b> readout shows the number
+              you crank into the mill — distance from the bed to the saw, in mm.
+              The yellow <b>NEXT</b> pill on the right tells you whether it's a
+              slab cut (round waste) or a plank cut (named after the plank it
+              will produce).
             </p>
             <p>
               Set the mill to that height, make the cut physically, then tap the
               big red <b>↓ Cut</b> button to record it. The illustration updates:
-              the slab above the blade is removed, any freed plank turns green
-              ✓, and the new blade height for the next cut appears.
+              the slab above the saw is removed, any freed plank turns green ✓,
+              and the new height for the next cut appears.
+            </p>
+            <p className="text-xs text-stone-500">
+              Tip: if you're running a bandsaw mill, switch <b>Cutting tool</b>
+              under Mill settings from <i>Chain</i> to <i>Blade</i> — the UI
+              labels will follow.
             </p>
           </Step>
 

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { toolName } from '../core/tool';
 import { computePlankTrim, edgingPlanForPlank } from '../core/trim';
 import type { EdgingPlan } from '../core/trim';
 import type { PlacedPlank, PlanState } from '../core/types';
@@ -34,6 +35,7 @@ interface Row {
  * Rendered as the body of a `<Collapsible>` in App.tsx.
  */
 export function EdgingGuide({ plan, remainingPlanks }: Props) {
+  const tool = toolName(plan.settings);
   const rows = useMemo<Row[]>(() => {
     const remainingSequences = new Set(remainingPlanks.map((p) => p.sequence));
     const out: Row[] = [];
@@ -71,9 +73,9 @@ export function EdgingGuide({ plan, remainingPlanks }: Props) {
     <div className="space-y-3 text-sm">
       <p className="text-xs text-stone-600 leading-relaxed">
         After each plank is sawn off the log, stand it vertically on the mill with
-        its wane edges pointing up and down. The blade cuts horizontally, so the
-        <b> blade-height</b> values below are the numbers you crank in — measured
-        from the bed to the blade.
+        its wane edges pointing up and down. The {tool} cuts horizontally, so the
+        <b> {tool}-height</b> values below are the numbers you crank in — measured
+        from the bed to the {tool}.
       </p>
 
       {needsEdging.length === 0 ? (

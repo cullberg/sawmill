@@ -7,7 +7,8 @@ const settings: MillSettings = {
   minSlab: 15,
   strategy: 'priority',
   edgeClearance: 5,
-  barkThickness: 0 // disabled in tests to preserve existing geometry expectations
+  barkThickness: 0, // disabled in tests to preserve existing geometry expectations
+  cuttingTool: 'chain'
 };
 
 const specs: PlankSpec[] = [
