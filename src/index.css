@@ -16,3 +16,19 @@ body,
     min-height: 40px;
   }
 }
+
+/* Hide native <input type="number"> spinner arrows on fields that
+   provide their own explicit − / + buttons (LogForm's prominent
+   diameter fields). Without this, some browsers stack the native
+   spinner on top of / next to our buttons and the layout looks
+   messy. `-webkit-appearance: none` covers Chrome, Edge and Safari;
+   `appearance: textfield` covers Firefox. */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.no-spinner {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}

@@ -72,16 +72,25 @@ export function LogForm({ log, onChange, onDone }: Props) {
         {/* All log measurements are entered in centimetres — that's how
             sawyers work with tape measures in the field. Planks, kerf, bark
             and blade height remain in mm; we convert at the UI boundary and
-            round to whole mm on write to avoid floating-point drift. */}
+            round to whole mm on write to avoid floating-point drift.
+
+            The two diameter fields are marked `prominent` because they
+            change on every log while support spacing / length / species
+            stay put for runs of similar logs — and on the workshop
+            tablet the sawyer needs to see these numbers from a step or
+            two back. Bigger input, bolder label, but same grid cell so
+            the two-column layout is preserved. */}
         <CmField
           label="Root-side Ø at support (cm)"
           valueMm={log.rootSideDiameter}
           onChangeMm={(v) => update('rootSideDiameter', v)}
+          prominent
         />
         <CmField
           label="Top-side Ø at support (cm)"
           valueMm={log.topSideDiameter}
           onChangeMm={(v) => update('topSideDiameter', v)}
+          prominent
         />
         <CmField
           label="Distance between supports (cm)"
@@ -171,6 +180,17 @@ export function LogForm({ log, onChange, onDone }: Props) {
  * `wholeCm` for fields like support spacing / log length where sub-cm is
  * meaningless. Values are always rounded to whole mm on write so the stored
  * value never drifts (e.g. 40.1 cm → exactly 401 mm rather than 400.9999…).
+ *
+ * Pass `prominent` for fields that change on every log (the two Ø
+ * fields) — renders with a taller input, bolder label, and a pair of
+ * big − / + buttons flanking the input that step by 1 cm. The buttons
+ * always snap to the nearest whole cm on press so repeated taps don't
+ * accumulate fractional drift (41.3 → + → 42, not 42.3). Users can
+ * still type fractional values directly (e.g. 41.3) for the rare
+ * case where they measured to the millimetre. Designed to sit in a
+ * 2-column grid alongside non-prominent peers; the grid row grows to
+ * fit the prominent cells and the non-prominent ones in that row just
+ * get extra white space below the input, which looks fine.
  */
 function CmField({
   label,
@@ -178,7 +198,8 @@ function CmField({
   onChangeMm,
   hint,
   hintTone = 'default',
-  wholeCm = false
+  wholeCm = false,
+  prominent = false
 }: {
   label: string;
   valueMm: number;
@@ -186,28 +207,109 @@ function CmField({
   hint?: string;
   hintTone?: 'default' | 'warn';
   wholeCm?: boolean;
+  prominent?: boolean;
 }) {
   // Show one decimal only when needed so whole-cm values stay clean (e.g.
   // "40" not "40.0"). `Number()`'s round-trip strips the trailing zero.
   const display = wholeCm
     ? Math.round(valueMm / 10)
     : Number((valueMm / 10).toFixed(1));
+  const labelCls = prominent ? 'text-stone-700 font-medium' : 'text-stone-600';
+  // Shared base for the <input>; prominent variants and stepper variants
+  // tweak the rounded corners so the input visually fuses with the − / +
+  // buttons flanking it.
+  const baseInputCls =
+    'block w-full border-stone-300 bg-stone-50 border focus:border-forest-500 focus:ring-forest-500';
+  const sizeCls = prominent
+    ? 'px-2 py-2.5 text-lg font-semibold tabular-nums'
+    : 'px-2 py-1.5';
+
+  /**
+   * − / + handlers. Always snap to the nearest whole cm so repeated
+   * taps from a fractional starting point (41.3 cm) don't leave the
+   * value stuck at 42.3 / 43.3 / etc. — the sawyer almost certainly
+   * wants round-cm values when they're using the buttons at all.
+   */
+  const stepCm = (direction: -1 | 1) => {
+    const currentCm = valueMm / 10;
+    const nextCm = Math.max(0, Math.round(currentCm) + direction);
+    onChangeMm(Math.round(nextCm) * 10);
+  };
+  const decDisabled = valueMm <= 0;
+
+  if (!prominent) {
+    // Compact variant: unchanged, no stepper.
+    return (
+      <label className="block text-sm">
+        <span className={labelCls}>{label}</span>
+        <input
+          type="number"
+          inputMode={wholeCm ? 'numeric' : 'decimal'}
+          step={wholeCm ? '1' : '0.1'}
+          value={display}
+          onChange={(e) => {
+            const cm = Number(e.target.value);
+            if (!Number.isFinite(cm)) return;
+            const mm = wholeCm ? Math.round(cm) * 10 : Math.round(cm * 10);
+            onChangeMm(mm);
+          }}
+          className={`mt-1 rounded-md ${baseInputCls} ${sizeCls}`}
+        />
+        {hint && (
+          <span
+            className={`text-xs ${
+              hintTone === 'warn' ? 'text-amber-800 font-medium' : 'text-stone-500'
+            }`}
+          >
+            {hint}
+          </span>
+        )}
+      </label>
+    );
+  }
+
+  // Prominent variant: − button · input · + button, all same height,
+  // fused into a single visual unit with rounded outer corners only.
+  // Native browser stepper is hidden (`no-spinner`) because its size
+  // and placement varies by browser — the explicit buttons are more
+  // consistent on the workshop tablet.
+  const btnCls =
+    'shrink-0 h-full w-11 flex items-center justify-center text-xl font-semibold bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-700 disabled:text-stone-300 disabled:bg-stone-50 transition';
   return (
     <label className="block text-sm">
-      <span className="text-stone-600">{label}</span>
-      <input
-        type="number"
-        inputMode={wholeCm ? 'numeric' : 'decimal'}
-        step={wholeCm ? '1' : '0.1'}
-        value={display}
-        onChange={(e) => {
-          const cm = Number(e.target.value);
-          if (!Number.isFinite(cm)) return;
-          const mm = wholeCm ? Math.round(cm) * 10 : Math.round(cm * 10);
-          onChangeMm(mm);
-        }}
-        className="mt-1 block w-full rounded-md border-stone-300 bg-stone-50 px-2 py-1.5 border focus:border-forest-500 focus:ring-forest-500"
-      />
+      <span className={labelCls}>{label}</span>
+      <div className="mt-1 flex items-stretch">
+        <button
+          type="button"
+          onClick={() => stepCm(-1)}
+          disabled={decDisabled}
+          aria-label={`Decrease ${label} by 1 cm`}
+          className={`${btnCls} rounded-l-md border-r-0`}
+        >
+          −
+        </button>
+        <input
+          type="number"
+          inputMode={wholeCm ? 'numeric' : 'decimal'}
+          step={wholeCm ? '1' : '0.1'}
+          value={display}
+          onChange={(e) => {
+            const cm = Number(e.target.value);
+            if (!Number.isFinite(cm)) return;
+            const mm = wholeCm ? Math.round(cm) * 10 : Math.round(cm * 10);
+            onChangeMm(mm);
+          }}
+          className={`${baseInputCls} ${sizeCls} text-center no-spinner`}
+        />
+        <button
+          type="button"
+          onClick={() => stepCm(1)}
+          aria-label={`Increase ${label} by 1 cm`}
+          className={`${btnCls} rounded-r-md border-l-0`}
+        >
+          +
+        </button>
+      </div>
       {hint && (
         <span
           className={`text-xs ${
