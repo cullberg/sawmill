@@ -362,14 +362,21 @@ function Step({
           {n}
         </div>
         <h3 className="flex-1 min-w-0 font-semibold text-steel-900">{title}</h3>
-        {/* Chevron: CSS rotates via the group-open variant. Plain text
-            so we don't need an icon dependency. */}
-        <span
+        {/* Chevron: inline SVG rather than the Unicode "▶" (U+25B6)
+            so the colour is guaranteed. On iOS and some Android
+            skins the character gets rendered by the system emoji
+            font as a blue glyph that ignores CSS `color`. An SVG
+            with `fill="currentColor"` respects the parent's
+            `text-*` class on every platform. Rotates via the
+            group-open variant. */}
+        <svg
           aria-hidden
-          className="text-forest-500 text-xs transition-transform group-open:rotate-90"
+          viewBox="0 0 10 10"
+          className="inline-block w-2.5 h-2.5 text-forest-500 transition-transform group-open:rotate-90"
+          fill="currentColor"
         >
-          ▶
-        </span>
+          <polygon points="2,1 9,5 2,9" />
+        </svg>
       </summary>
       <div className="px-3 pb-3 pt-2 space-y-2">{children}</div>
     </details>

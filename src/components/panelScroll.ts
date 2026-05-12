@@ -58,16 +58,8 @@ export function scrollPanelIntoView(domId: string): void {
 
 /**
  * Toggle a Collapsible then scroll a (possibly different) target into
- * view once the toggle has rendered and laid out. The two canonical
- * flows:
- *
- *   - "Start next log": open the log-measurements panel, then scroll
- *     its own id into view so the sawyer sees it.
- *       togglePanelAndScroll('log', true, 'panel-log')
- *
- *   - "OK, back to cutting": close the log-measurements panel, then
- *     scroll the Controls card back into view.
- *       togglePanelAndScroll('log', false, 'panel-controls')
+ * view once the toggle has rendered and laid out. Used by "Start next
+ * log" to open the Log-measurements panel and scroll onto it.
  *
  * Keeping the open and scroll concerns in one helper prevents the two
  * call sites from drifting and makes the race-avoidance explicit.
@@ -79,4 +71,23 @@ export function togglePanelAndScroll(
 ): void {
   setPanelOpen(panelId, open);
   afterLayout(() => scrollPanelIntoView(scrollTargetId));
+}
+
+/**
+ * Toggle a Collapsible then scroll the page to the very top (the
+ * Help pill and primary column's ConeBanner + EndView come into
+ * view). Used by "OK, back to cutting" so the sawyer sees the whole
+ * illustration + Controls card again, not just the Controls panel
+ * landing halfway down the page.
+ *
+ * Same two-RAF wait as `togglePanelAndScroll` so the panel's collapse
+ * has finished rendering before the scroll animation starts — without
+ * it, the scroll would race the layout shift and undershoot.
+ */
+export function togglePanelAndScrollToTop(panelId: string, open: boolean): void {
+  setPanelOpen(panelId, open);
+  afterLayout(() => {
+    if (typeof window === 'undefined') return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
 }

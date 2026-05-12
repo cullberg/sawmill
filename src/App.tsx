@@ -7,7 +7,7 @@ import { EndView } from './components/EndView';
 import { HelpModal } from './components/HelpModal';
 import { LogForm } from './components/LogForm';
 import { LogHistory } from './components/LogHistory';
-import { togglePanelAndScroll } from './components/panelScroll';
+import { togglePanelAndScrollToTop } from './components/panelScroll';
 import { PriorityList } from './components/PriorityList';
 import { PwaStatus } from './components/PwaStatus';
 import { SettingsForm } from './components/SettingsForm';
@@ -91,19 +91,18 @@ export default function App() {
   /**
    * "OK, back to cutting" from the Log measurements panel: close the
    * panel (so its real-estate returns to the illustration) and scroll
-   * the Controls card back into view so the Cut button is under the
-   * sawyer's thumb again. Mirror of the "Start next log" flow that
-   * scrolls the other way.
+   * the page all the way to the top so the sawyer sees the ConeBanner
+   * + EndView + Controls card as one unit, with the Cut button below
+   * its live illustration. "Top of page" matches the user's mental
+   * model better than "top of Controls" — the latter used to hide
+   * the EndView above the fold on a tablet.
    *
-   * Uses `togglePanelAndScroll` so the close → layout → scroll
-   * sequence is race-free: scrolling to `panel-controls` before the
-   * panel collapse has rendered would land on the pre-collapse
-   * position, shooting past the Controls card. The helper waits two
-   * animation frames so React's commit and the browser's layout
-   * pass both complete first.
+   * Uses the two-RAF-aware helper so the close → layout → scroll
+   * sequence is race-free. Without it, scrolling would start while
+   * the panel was still collapsing and undershoot.
    */
   const onLogMeasurementsDone = () => {
-    togglePanelAndScroll('log', false, 'panel-controls');
+    togglePanelAndScrollToTop('log', false);
   };
 
   return (

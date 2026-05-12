@@ -100,14 +100,24 @@ export function Collapsible({
           aria-expanded={open}
           className="flex-1 flex items-center gap-2 text-left min-w-0"
         >
-          <span
-            className={`inline-block text-forest-500 transition-transform ${
+          {/* Chevron: a right-pointing triangle in our brand green.
+              Using inline SVG rather than the Unicode "▶" (U+25B6)
+              because on iOS and some Android skins that character is
+              rendered by the system EMOJI font as a blue "▶️" glyph
+              that ignores CSS `color` — making the chevron stubbornly
+              blue no matter what Tailwind class we apply. SVG with
+              `fill="currentColor"` honours the parent's `text-*`
+              class on every platform. */}
+          <svg
+            aria-hidden
+            viewBox="0 0 10 10"
+            className={`inline-block w-2.5 h-2.5 text-forest-500 transition-transform ${
               open ? 'rotate-90' : ''
             }`}
-            aria-hidden
+            fill="currentColor"
           >
-            ▶
-          </span>
+            <polygon points="2,1 9,5 2,9" />
+          </svg>
           <span className="font-semibold text-stone-800 truncate">{title}</span>
           {!open && summary && (
             <span className="text-xs text-stone-500 truncate">{summary}</span>
