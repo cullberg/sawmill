@@ -45,7 +45,7 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,jpg,ico,webmanifest}'],
         // Default is 2 MiB. We bump to 5 MiB so future growth (bigger
         // icons, extra fonts, more images in the help modal) doesn't
         // silently drop files from the precache manifest.

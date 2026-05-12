@@ -47,6 +47,25 @@ export function HelpModal({ onClose }: Props) {
         </header>
 
         <div className="px-6 py-4 overflow-y-auto text-sm text-steel-800 space-y-5 leading-relaxed">
+          {/* Photo of the physical mill this planner was built for —
+              gives new users an anchor between the on-screen illustration
+              and the real machine they're about to feed a log into.
+              Uses BASE_URL so it resolves correctly both in dev (`/`) and
+              when deployed under the GitHub Pages subpath (`/sawmill/`). */}
+          <figure className="-mx-6 -mt-4 mb-1">
+            <img
+              src={`${import.meta.env.BASE_URL}sawmill-photo.jpg`}
+              alt="The sawmill this planner is built for: a bandsaw mill under a freshly-built open timber shelter, with two spruce logs queued on the infeed ramp."
+              className="w-full h-48 sm:h-56 object-cover"
+              loading="lazy"
+              decoding="async"
+            />
+            <figcaption className="px-6 pt-1.5 text-xs text-stone-500 italic">
+              The mill this planner was built for — logs queued on the
+              infeed, ready to saw.
+            </figcaption>
+          </figure>
+
           <p className="text-steel-700">
             A typical session, top to bottom. You'll only need to tweak the Mill
             settings and Preferred dimensions once — after that, sawing a log
@@ -99,19 +118,38 @@ export function HelpModal({ onClose }: Props) {
             </p>
           </Step>
 
-          <Step n={4} title="Make the first cut">
+          <Step n={4} title="Square the cant (first four slabs)">
+            <p>
+              A fresh round log always starts with <b>four squaring slabs</b>, one
+              per face. The <b>NEXT</b> pill walks you through them as{' '}
+              <i>"Squaring slab (1 of 4)"</i> … <i>"(4 of 4)"</i>, cycling the
+              recommended rotation 0° → 90° → 180° → 270°. After the fourth
+              slab you have a square cant with four flat faces and no bark —
+              only then does the planner start freeing planks.
+            </p>
             <p>
               The big <b>Set chain / blade height</b> readout shows the number
               you crank into the mill — distance from the bed to the saw, in mm.
-              The yellow <b>NEXT</b> pill on the right tells you whether it's a
-              slab cut (round waste) or a plank cut (named after the plank it
-              will produce).
+              Set the mill to that height, make the cut physically, then tap
+              the big red <b>↓ Cut</b> button to record it.
             </p>
             <p>
-              Set the mill to that height, make the cut physically, then tap the
-              big red <b>↓ Cut</b> button to record it. The illustration updates:
-              the slab above the saw is removed, any freed plank turns green ✓,
-              and the new height for the next cut appears.
+              By default <b>Auto-rotate during squaring</b> is on (Mill
+              settings): immediately after you tap Cut, the illustration
+              turns the log 90° to the next face — so the NEXT pill, the
+              height readout and the end-view all show exactly what the
+              next setup looks like (bed / supports dropped, new blade
+              height, new face up). Tap Cut again once you've mechanically
+              repositioned the log, and so on for four slabs. After the
+              fourth slab the log auto-rotates once more, straight to the
+              best planking face, so you can keep tapping Cut and start
+              peeling planks without a manual spin.
+            </p>
+            <p>
+              Prefer to rotate manually? Turn the toggle off. The log will
+              stay at whatever rotation you set, and the NEXT pill will
+              remind you <i>"Rotate to 90° first"</i> whenever you drift off
+              the recommended face.
             </p>
             <p className="text-xs text-stone-500">
               Tip: if you're running a bandsaw mill, switch <b>Cutting tool</b>
@@ -120,12 +158,34 @@ export function HelpModal({ onClose }: Props) {
             </p>
           </Step>
 
-          <Step n={5} title="Rotate and keep cutting">
+          <Step n={5} title="Plank top-to-bottom">
             <p>
-              Use <b>⟲ 90°</b> / <b>90° ⟳</b> to spin the log. Rotating is free —
-              it doesn't use an undo slot. The illustration shows your current
-              rotation ("top 0°" label above the log) and which planks are still
-              to cut.
+              Once the cant is squared, the NEXT pill switches to{' '}
+              <i>"Plank cut → 150×50"</i> and works down the face with the
+              tallest remaining stack. Each plank typically needs <b>two cuts</b>:
+              a thin waste slab to expose the top, then the plank cut itself.
+              The illustration and the big height readout update after every
+              cut so you never have to guess the next crank setting.
+            </p>
+            <p>
+              When one face is empty, rotate 180° (or 90°) to reach the next
+              stack. If you rotate to a face the planner didn't pick, the NEXT
+              pill adds a small <i>↻ Rotate to X°</i> hint — follow it or
+              ignore it, the height readout tracks whichever face you chose.
+            </p>
+            <p>
+              The first and last plank on a face often need a little trimming
+              for wane afterwards — check the <b>Edging guide</b> below the
+              Controls for the second-pass widths.
+            </p>
+          </Step>
+
+          <Step n={6} title="Rotate and keep cutting">
+            <p>
+              Use <b>⟲ 90°</b> / <b>90° ⟳</b> to spin the log manually at any
+              time. Rotating is free — it doesn't use an undo slot. The
+              illustration shows your current rotation ("top 0°" label above
+              the log) and which planks are still to cut.
             </p>
             <p>
               Made a mistake? <b>↑ Undo</b> rewinds the last cut or rotation,{' '}
@@ -133,7 +193,7 @@ export function HelpModal({ onClose }: Props) {
             </p>
           </Step>
 
-          <Step n={6} title="Finish the log">
+          <Step n={7} title="Finish the log">
             <p>
               When the last plank is the one sitting on the bed, the button
               turns green and reads <b>✓ Lift final plank</b>. Tap it to record
@@ -149,7 +209,7 @@ export function HelpModal({ onClose }: Props) {
             </p>
           </Step>
 
-          <Step n={7} title="Check your yield">
+          <Step n={8} title="Check your yield">
             <p>
               Expand <b>Log report</b> (below the Cut button) any time to see
               taper, root / top Ø, volume, cuts made, end-view yield %, and a

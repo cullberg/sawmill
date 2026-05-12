@@ -8,7 +8,8 @@ const settings: MillSettings = {
   strategy: 'priority',
   edgeClearance: 5,
   barkThickness: 0, // disabled in tests to preserve existing geometry expectations
-  cuttingTool: 'chain'
+  cuttingTool: 'chain',
+  autoRotateForSquaring: true
 };
 
 const specs: PlankSpec[] = [

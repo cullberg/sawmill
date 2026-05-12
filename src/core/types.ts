@@ -44,6 +44,16 @@ export interface MillSettings {
    * mill keeps the term its sawyer prefers.
    */
   cuttingTool: 'chain' | 'blade';
+  /**
+   * When true (default), the Cut button automatically rotates the log
+   * to the face recommended by the two-phase next-step planner before
+   * it commits the cut. When false, the planner always describes the
+   * next cut at the sawyer's current rotation and only surfaces the
+   * recommended rotation as a hint — the sawyer is trusted to spin the
+   * log manually. Kept as a setting because muscle-memory sawyers may
+   * prefer deterministic behaviour with no hidden rotations.
+   */
+  autoRotateForSquaring: boolean;
 }
 
 export interface PlankSpec {
@@ -121,6 +131,25 @@ export interface ProducedPlank {
   /** Four corners of the plank rectangle, in world frame, mm. */
   polygon: Vec2[];
   sequence: number;
+  /**
+   * Snapshot of the log cross-section polygon at the moment this plank
+   * was sawn off (before the step clip was applied). Used by the end-view
+   * and edging guide to compute the plank's wane trim against the shape
+   * as it actually was when the plank came off — which correctly accounts
+   * for prior squaring cuts and isn't the worst-case round-log value.
+   * Optional to stay backward-compatible with plans saved before this
+   * field existed; readers should fall back to the original log circle.
+   */
+  shapeAtCut?: Vec2[];
+  /**
+   * Endpoints (in log frame, mm) of the straight cut face added to the
+   * remaining log when this plank was freed. Drawn in the end-view so
+   * every produced plank gets the same "cut-face line" between itself
+   * and the current shape, regardless of whether later cuts have since
+   * trimmed that boundary away from `plan.shape`. Optional for
+   * backwards-compat with plans saved before the field existed.
+   */
+  cutFace?: [Vec2, Vec2];
 }
 
 export interface PlanState {

@@ -3,6 +3,7 @@ import { toolName } from '../core/tool';
 import { computePlankTrim, edgingPlanForPlank } from '../core/trim';
 import type { EdgingPlan } from '../core/trim';
 import type { PlacedPlank, PlanState } from '../core/types';
+import { initialShape } from '../state/usePlan';
 
 interface Props {
   plan: PlanState;
@@ -38,23 +39,39 @@ export function EdgingGuide({ plan, remainingPlanks }: Props) {
   const tool = toolName(plan.settings);
   const rows = useMemo<Row[]>(() => {
     const remainingSequences = new Set(remainingPlanks.map((p) => p.sequence));
+    const producedBySeq = new Map(plan.produced.map((pp) => [pp.sequence, pp]));
+    // Once a plank has been sawn off, the current `plan.shape` no longer
+    // overlaps its y-range (the slab has been clipped away), which would
+    // make its trim compute to zero and the row silently disappear from
+    // the guide. Edging is a post-process though — the sawyer still wants
+    // to see those rows after the cut. For each produced plank we use
+    // the shape that was snapshotted at the moment of its cut, which
+    // correctly reflects any earlier squaring cuts. Fall back to the
+    // original log circle only for legacy plans saved before the
+    // `shapeAtCut` field existed. Remaining planks keep using the live
+    // shape so the reactive "cant is now squared → zero trim" feedback
+    // still works.
+    const originalShape = initialShape(plan.log);
     const out: Row[] = [];
     for (const p of plan.planks) {
-      const trim = computePlankTrim(plan.shape, p);
+      const produced = !remainingSequences.has(p.sequence);
+      const shapeForTrim = produced
+        ? producedBySeq.get(p.sequence)?.shapeAtCut ?? originalShape
+        : plan.shape;
+      const trim = computePlankTrim(shapeForTrim, p);
       const eplan = edgingPlanForPlank(trim, p);
       out.push({
         key: `plank-${p.sequence}`,
         plank: p,
         plan: eplan,
-        // If the plank isn't in the remaining list, it's already been sawn.
-        produced: !remainingSequences.has(p.sequence),
+        produced,
         sequence: p.sequence
       });
     }
     // Sort by sequence so the list follows the cutting order.
     out.sort((a, b) => a.sequence - b.sequence);
     return out;
-  }, [plan.planks, plan.shape, remainingPlanks]);
+  }, [plan.planks, plan.shape, plan.log, plan.produced, remainingPlanks]);
 
   const needsEdging = rows.filter((r) => !r.plan.clean);
   const clean = rows.filter((r) => r.plan.clean);

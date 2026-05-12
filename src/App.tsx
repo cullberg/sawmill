@@ -96,7 +96,7 @@ export default function App() {
             viewport so the operator's main working surface is never pushed
             below the fold. */}
         <div className="space-y-3 order-1">
-          <ConeBanner cone={cone} />
+          <ConeBanner cone={cone} log={plan.log} />
           <EndView plan={plan} blade={blade} remainingPlanks={remainingPlanks} />
           <Controls
             rotation={plan.rotationDeg}
@@ -113,6 +113,11 @@ export default function App() {
             bladeValid={blade.valid}
             bladeKind={blade.kind}
             bladeProducing={blade.producingLabel}
+            bladePhase={blade.phase}
+            squaringIndex={blade.squaringIndex}
+            squaringTotal={blade.squaringTotal}
+            suggestRotationDeg={blade.suggestRotationDeg}
+            autoRotateForSquaring={plan.settings.autoRotateForSquaring}
             logComplete={logComplete}
             cutsCount={plan.cuts.length}
             producedCount={plan.produced.length}

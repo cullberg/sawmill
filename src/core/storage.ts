@@ -16,7 +16,8 @@ export const defaultSettings: MillSettings = {
   strategy: 'priority',
   edgeClearance: 5,
   barkThickness: 10,
-  cuttingTool: 'chain'
+  cuttingTool: 'chain',
+  autoRotateForSquaring: true
 };
 
 /**

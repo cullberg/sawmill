@@ -73,6 +73,25 @@ export function SettingsForm({ settings, onChange }: Props) {
           </select>
         </Field>
       </div>
+      {/* Full-width so the longer explanatory label has room to breathe. */}
+      <label className="flex items-start gap-2 text-sm pt-1">
+        <input
+          type="checkbox"
+          checked={settings.autoRotateForSquaring}
+          onChange={(e) => update('autoRotateForSquaring', e.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded border-stone-400 text-brand-600 focus:ring-brand-500"
+        />
+        <span className="flex-1">
+          <span className="text-stone-700 font-medium">Auto-rotate during squaring</span>
+          <span className="block text-xs text-stone-500">
+            After each of the first four squaring slabs, the log spins
+            automatically to the next face (0° → 90° → 180° → 270°) so the
+            NEXT pill and height readout preview the next setup. Uncheck
+            to rotate manually — the planner will then hint{' '}
+            <i>"Rotate to X° first"</i> when you're off the recommended face.
+          </span>
+        </span>
+      </label>
     </div>
   );
 }

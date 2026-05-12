@@ -14,6 +14,21 @@ interface Props {
   bladeValid: boolean;
   bladeKind: 'slab' | 'plank' | 'done' | 'none';
   bladeProducing?: string;
+  /** Coarse workflow phase — drives the NEXT pill copy. */
+  bladePhase: 'squaring' | 'planking' | 'done' | 'none';
+  /** 1-based index of the squaring slab being recommended. */
+  squaringIndex?: number;
+  /** Total number of squaring slabs expected (usually 4). */
+  squaringTotal?: number;
+  /**
+   * Rotation the planner thinks the log should be at for this cut.
+   * Present when it differs from the current rotation. Drives the
+   * "Rotate to X°" hint and, when auto-rotate is on, the Cut button
+   * caption ("Rotate & cut").
+   */
+  suggestRotationDeg?: number;
+  /** Whether the Cut button will auto-rotate before cutting. */
+  autoRotateForSquaring: boolean;
   /** All planned planks have been sawn — time to load the next log. */
   logComplete: boolean;
   /** Counts shown in the completion celebration banner. */
@@ -51,21 +66,41 @@ export function Controls({
   bladeValid,
   bladeKind,
   bladeProducing,
+  bladePhase,
+  squaringIndex,
+  squaringTotal,
+  suggestRotationDeg,
+  autoRotateForSquaring,
   logComplete,
   cutsCount,
   producedCount,
   toolLabel
 }: Props) {
+  // NEXT-pill primary line. Squaring cuts get a numbered label so the
+  // sawyer can see "3 of 4 faces done". Planking cuts keep the classic
+  // "Plank cut → 150×50" / "Slab cut" copy.
   const kindLabel =
-    bladeKind === 'plank'
-      ? `Plank cut → ${bladeProducing ?? ''}`
-      : bladeKind === 'slab'
-        ? 'Slab cut (round waste)'
-        : bladeKind === 'done'
-          ? `Log processed${bladeProducing ? ` — final: ${bladeProducing}` : ''}`
-          : '—';
+    bladePhase === 'squaring' && bladeKind !== 'none'
+      ? `Squaring slab (${squaringIndex ?? 1} of ${squaringTotal ?? 4})`
+      : bladeKind === 'plank'
+        ? `Plank cut → ${bladeProducing ?? ''}`
+        : bladeKind === 'slab'
+          ? 'Slab cut (round waste)'
+          : bladeKind === 'done'
+            ? `Log processed${bladeProducing ? ` — final: ${bladeProducing}` : ''}`
+            : '—';
 
   const isDone = bladeKind === 'done';
+  // Rotation hint: only shown when the log isn't at the recommended
+  // face AND we won't fix it for them. With auto-rotate on, the log
+  // is post-rotated after every squaring cut, so the sawyer arrives
+  // at the next cut already aligned — nothing to warn about. With
+  // auto-rotate off (or at the very first cut of a freshly-rotated
+  // log), surface a quiet reminder that they need to spin the log.
+  const rotationHint =
+    suggestRotationDeg !== undefined && !autoRotateForSquaring
+      ? `Rotate to ${suggestRotationDeg}° first`
+      : undefined;
 
   /**
    * Completion flow: every planned plank is sawn. Swap the blade readout
@@ -160,6 +195,14 @@ export function Controls({
               <div className="font-semibold leading-tight">
                 {isDone ? `✓ ${kindLabel}` : kindLabel}
               </div>
+              {/* Rotation hint: shown both when we'll auto-rotate (so the
+                  sawyer is warned the log will spin) and when manual
+                  rotation is expected (so they know to rotate before
+                  cutting). Styled subtly so it doesn't compete with the
+                  main pill text. */}
+              {rotationHint && !isDone && (
+                <div className="text-[10px] mt-0.5 opacity-80">↻ {rotationHint}</div>
+              )}
             </div>
           </div>
 

@@ -238,9 +238,14 @@ export function computeLayout(input: LayoutInput): LayoutResult {
           label: `${spec.width}×${spec.thickness}`
         });
         counts[spec.id] = (counts[spec.id] ?? 0) + 1;
-        // Stack above and below this side board.
-        sequence = fillStack(cx, o.h / 2 + kerf, 1, null, sequence);
-        sequence = fillStack(cx, -o.h / 2 - kerf, -1, null, sequence);
+        // Stack above and below this side board. Stacked planks are
+        // centred at `cx` and must not extend back into the central
+        // column — their half-width is capped at the side board's own
+        // half-width so they stay inside the side-board corridor
+        // between `cantHalfWidth + kerf` and the circle edge.
+        const sideHalf = o.w / 2;
+        sequence = fillStack(cx, o.h / 2 + kerf, 1, sideHalf, sequence);
+        sequence = fillStack(cx, -o.h / 2 - kerf, -1, sideHalf, sequence);
         return;
       }
     }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { computeLayout } from '../core/layout';
-import { circlePolygon, clipHalfPlane } from '../core/geometry';
+import { circlePolygon, clipHalfPlane, convexChord, polygonHasFlatFace } from '../core/geometry';
 import { rootLowering, designDiameter } from '../core/taper';
 import { initialPlan, loadPlan, savePlan } from '../core/storage';
 import type {
@@ -43,6 +43,39 @@ export interface BladeReadout {
   kind: 'slab' | 'plank' | 'done' | 'none';
   /** If `kind === 'plank'`, the plank that will be produced. */
   producingLabel?: string;
+  /**
+   * Coarse phase of the sawing workflow:
+   *  - 'squaring' – still turning the round log into a 4-sided cant.
+   *    The first four cuts recommended are slabs at 0°/90°/180°/270°
+   *    (one per face) so the sawyer ends up with a rectangular stock
+   *    before any plank is freed. This matches real-world practice and
+   *    is much easier to reason about than the old per-rotation greedy
+   *    rule which would happily plank-cut one face while three others
+   *    were still round.
+   *  - 'planking' – cant is squared; we now work top-to-bottom on the
+   *    face with the tallest remaining plank stack, rotating to the
+   *    next face when the current one is exhausted.
+   *  - 'done' / 'none' – mirror `kind`.
+   */
+  phase: 'squaring' | 'planking' | 'done' | 'none';
+  /**
+   * 1-based index of the current squaring slab (1..squaringTotal) when
+   * `phase === 'squaring'`, otherwise `undefined`. Drives the "Squaring
+   * slab (n of 4)" label in the NEXT pill.
+   */
+  squaringIndex?: number;
+  /** Total number of squaring slabs the planner expects (always 4 today). */
+  squaringTotal?: number;
+  /**
+   * Rotation (deg) the planner thinks the log *should* be at for the
+   * next cut. When this differs from `plan.rotationDeg`, the UI either
+   * auto-rotates (if `settings.autoRotateForSquaring`) on commit or
+   * shows a "Rotate to X° first" hint and still lets the sawyer cut at
+   * their current rotation. `undefined` when the current rotation is
+   * already the recommended one (or we have no opinion — e.g. planking
+   * phase where any face is acceptable).
+   */
+  suggestRotationDeg?: number;
 }
 
 export interface ConeState {
@@ -50,6 +83,15 @@ export interface ConeState {
   rootDropMm: number;
   /** True once two cuts 180° apart have been committed. */
   resolved: boolean;
+  /**
+   * True when the shape currently has a flat face resting on the mill
+   * bed (i.e. the bed-side of `plan.shape` is a straight edge). The log
+   * can't roll in that case, so any cone-compensation advice is moot —
+   * the UI hides the banner entirely. This is a function of `plan.shape`
+   * and `plan.rotationDeg`, so it flips back to `false` if the sawyer
+   * rotates the curved side of the log back down.
+   */
+  bedFlat: boolean;
 }
 
 export interface UsePlan {
@@ -83,7 +125,9 @@ export interface UsePlan {
 }
 
 // Initial shape = design-circle polygon centred at (0,0) in LOG frame.
-function initialShape(log: LogInput): Vec2[] {
+// Exported so other modules (e.g. the edging guide) can compute against
+// the original log cross-section independently of the current cut state.
+export function initialShape(log: LogInput): Vec2[] {
   const r = designDiameter(log) / 2;
   return r > 0 ? circlePolygon(0, 0, r, 96) : [];
 }
@@ -118,7 +162,7 @@ function dot(a: Vec2, b: Vec2): number {
   return a.x * b.x + a.y * b.y;
 }
 
-/** Min/max signed projection of polygon points onto direction `n`. */
+  /** Min/max signed projection of polygon points onto direction `n`. */
 function projectionRange(poly: Vec2[], n: Vec2): { min: number; max: number } {
   let min = Infinity;
   let max = -Infinity;
@@ -128,6 +172,192 @@ function projectionRange(poly: Vec2[], n: Vec2): { min: number; max: number } {
     if (v > max) max = v;
   }
   return { min, max };
+}
+
+/**
+ * The four canonical squaring rotations, in the order the planner will
+ * recommend them: flip 90° each time so the sawyer always puts the
+ * previous flat face down before cutting the next one. After the
+ * fourth, the cant is square. Exported for tests.
+ */
+export const SQUARING_ROTATIONS = [0, 90, 180, 270] as const;
+const SQUARING_TOTAL = SQUARING_ROTATIONS.length;
+
+/** Normalise a rotation to [0, 360). */
+function normDeg(deg: number): number {
+  return ((deg % 360) + 360) % 360;
+}
+
+/**
+ * Given the committed cut history, returns the number of *distinct*
+ * squaring rotations already slabbed (0..4). A rotation counts as
+ * "slabbed" if any prior cut was made at (approximately) that angle.
+ * We only inspect whether the angle is present — not what kind of cut
+ * it was — because in the two-phase workflow the first cut at a given
+ * squaring rotation is always a slab by construction.
+ *
+ * Exported for unit tests.
+ */
+export function squaringProgress(cuts: Cut[]): { doneCount: number; doneSet: Set<number> } {
+  const done = new Set<number>();
+  for (const c of cuts) {
+    const a = normDeg(c.rotationDeg);
+    for (const target of SQUARING_ROTATIONS) {
+      // ±1° tolerance matches the cone-banner's matching tolerance so
+      // a "close enough" rotation still counts as that face.
+      if (Math.abs(a - target) <= 1 || Math.abs(a - target) >= 359) {
+        done.add(target);
+        break;
+      }
+    }
+  }
+  return { doneCount: done.size, doneSet: done };
+}
+
+/**
+ * The next squaring rotation the planner wants, or `undefined` if all
+ * four faces are already slabbed. Order is taken from
+ * `SQUARING_ROTATIONS`: 0° is the natural starting face (the rotation
+ * the user has at log load); subsequent 90° flips keep the sawyer's
+ * mental model simple.
+ *
+ * Exported for unit tests.
+ */
+export function nextSquaringRotation(cuts: Cut[]): number | undefined {
+  const { doneSet } = squaringProgress(cuts);
+  for (const r of SQUARING_ROTATIONS) {
+    if (!doneSet.has(r)) return r;
+  }
+  return undefined;
+}
+
+/**
+ * Which rotation should the planker work on? Heuristic: pick the
+ * squaring rotation whose "up" face has the most remaining planks
+ * whose bed-up projection puts them above the pith at that rotation.
+ * Ties are broken by total plank area, then by preferring 0° (since
+ * that's where the main cant stack was laid out).
+ *
+ * Returns `undefined` when there are no remaining planks.
+ *
+ * Exported for unit tests.
+ */
+export function bestPlankingRotation(
+  remaining: PlacedPlank[],
+  shape: Vec2[]
+): number | undefined {
+  if (remaining.length === 0) return undefined;
+  let best: { deg: number; count: number; area: number } | null = null;
+  for (const deg of SQUARING_ROTATIONS) {
+    const n = bedUpInLog(deg);
+    const shapeR = shape.length ? projectionRange(shape, n) : { min: 0, max: 0 };
+    let count = 0;
+    let area = 0;
+    // Tolerance guards against `Math.cos(π/2) ≈ 6e-17` (and similar
+    // trig noise) leaking planks from the wrong face into the count.
+    // A plank centre must be meaningfully above the pith — more than
+    // a thousandth of a mm — to count as reachable from this face.
+    const CENTRE_EPS = 1e-3;
+    for (const pl of remaining) {
+      const r = projectionRange(plankCorners(pl), n);
+      // Plank must still be inside the current shape at this rotation,
+      // and its centre must be on the "up" side of the pith so it's
+      // reachable from this face (a plank on the opposite side would
+      // need the log flipped first).
+      const centreProj = dot({ x: pl.x, y: pl.y }, n);
+      if (centreProj <= CENTRE_EPS) continue;
+      if (r.max > shapeR.max + 1e-6) continue;
+      count += 1;
+      area += pl.width * pl.thickness;
+    }
+    const entry = { deg, count, area };
+    if (!best) {
+      best = entry;
+      continue;
+    }
+    // Strict winner wins outright.
+    if (count > best.count) {
+      best = entry;
+      continue;
+    }
+    if (count < best.count) continue;
+    if (area > best.area) {
+      best = entry;
+      continue;
+    }
+    if (area < best.area) continue;
+    // Exact tie on count & area: prefer 0° over all others, then 90°,
+    // then 180°, then 270°. The helper iterates rotations in that
+    // order, so the incumbent is already better-or-equal by tiebreak
+    // and we leave it untouched.
+  }
+  // If no face has any upward plank (e.g. only cant remains, which
+  // straddles the pith), fall back to whatever rotation the user is
+  // at — there's no face-preference to offer.
+  if (!best || best.count === 0) return undefined;
+  return best.deg;
+}
+
+/**
+ * Given a rotation, compute the usual "topmost remaining plank,
+ * slab-or-plank cut" proposal used to drive the blade readout. Pulled
+ * out of the memo so the two phases share one decision routine — the
+ * phase logic only changes *which rotation we evaluate against* and
+ * how the UI labels the result.
+ */
+function proposeCutAtRotation(
+  shape: Vec2[],
+  remaining: PlacedPlank[],
+  rotationDeg: number,
+  kerf: number
+): Omit<BladeReadout, 'phase' | 'squaringIndex' | 'squaringTotal' | 'suggestRotationDeg'> {
+  if (shape.length < 3 || remaining.length === 0) {
+    const r = shape.length
+      ? projectionRange(shape, bedUpInLog(rotationDeg))
+      : { min: 0, max: 0 };
+    return { bladeAboveBed: 0, bladeBedY: 0, bedY: r.min, valid: false, kind: 'none' };
+  }
+  const n = bedUpInLog(rotationDeg);
+  const shapeR = projectionRange(shape, n);
+
+  // Highest-top remaining plank whose top is still within (or at) the shape top.
+  let best: { pl: PlacedPlank; top: number; bottom: number } | null = null;
+  for (const pl of remaining) {
+    const r = projectionRange(plankCorners(pl), n);
+    if (r.max > shapeR.max + 1e-6) continue;
+    if (!best || r.max > best.top) {
+      best = { pl, top: r.max, bottom: r.min };
+    }
+  }
+  if (!best) {
+    return { bladeAboveBed: 0, bladeBedY: 0, bedY: shapeR.min, valid: false, kind: 'none' };
+  }
+
+  const isExposed = Math.abs(best.top - shapeR.max) < Math.max(1e-6, kerf * 0.1);
+  const proposed = isExposed ? best.bottom - kerf : best.top;
+
+  // A plank cut that would place the blade at or below the bed means
+  // the plank is already resting on the bed — there is nothing left
+  // below it to cut through. Treat the log as processed at this rotation.
+  if (isExposed && proposed <= shapeR.min + 1e-6) {
+    return {
+      bladeAboveBed: best.top - shapeR.min,
+      bladeBedY: best.top,
+      bedY: shapeR.min,
+      valid: false,
+      kind: 'done',
+      producingLabel: best.pl.label
+    };
+  }
+
+  return {
+    bladeAboveBed: proposed - shapeR.min,
+    bladeBedY: proposed,
+    bedY: shapeR.min,
+    valid: true,
+    kind: isExposed ? 'plank' : 'slab',
+    producingLabel: isExposed ? best.pl.label : undefined
+  };
 }
 
 export function usePlan(): UsePlan {
@@ -224,79 +454,91 @@ export function usePlan(): UsePlan {
   }, [plan.planks, plan.produced]);
 
   /**
-   * Determine the next blade position for the current rotation.
+   * Determine the next blade position using a two-phase workflow.
    *
-   * Frames: shape and planks live in LOG frame. "Bed up" in log frame is
-   * n̂ = (sin θ, cos θ). A point's bed-frame height is p · n̂.
+   * Phase A — squaring: for a fresh log the planner insists on four
+   * slab cuts first, one per 90° face, rotating 0° → 90° → 180° → 270°.
+   * The result is a rectangular cant with flat faces on every side,
+   * matching how sawyers actually work and sidestepping the old bug
+   * where rotating mid-plank would happily propose a new plank on a
+   * still-round face.
    *
-   * Physical model: the blade is `kerf` thick. Its BOTTOM edge (bladeBedY)
-   * is what the sawyer cranks in on the mill — after the cut, the remaining
-   * log's top surface sits exactly at bladeBedY. Material removed by the
-   * cut is [bladeBedY, bladeBedY + kerf] (kerf sawdust) plus everything
-   * above bladeBedY + kerf (the slab).
+   * Phase B — planking: once the cant is squared, the planner picks
+   * the face with the most reachable remaining planks (usually the
+   * widest stack above the cant) and delegates to the classic per-
+   * rotation "slab or plank" logic. The sawyer rotates manually in
+   * this phase; if they're already on a planking face the readout
+   * tracks them exactly, otherwise the pill surfaces the recommended
+   * rotation as a hint.
    *
-   * Two-stage rule per plank:
-   *   - If the topmost remaining plank's top edge is STRICTLY below the
-   *     current shape top, we need a SLAB cut. Blade bottom = plankTop, so
-   *     the kerf band sits in the discarded round waste just above the plank.
-   *   - Otherwise (plank's top IS the shape top), we need a PLANK cut.
-   *     Blade bottom = plankBottom − kerf, so the kerf band sits exactly in
-   *     the planned kerf gap below the freed plank.
-   *   - If that plank cut would require the blade to drop below the bed
-   *     (or inside the bed), the plank IS the last of the log; return
-   *     kind:'done' and leave the blade visible just above the plank.
+   * Frames: shape and planks live in LOG frame. "Bed up" in log frame
+   * is n̂ = (sin θ, cos θ). A point's bed-frame height is p · n̂.
+   *
+   * Physical model (unchanged per cut): the blade is `kerf` thick.
+   * Its BOTTOM edge (bladeBedY) is what the sawyer cranks in on the
+   * mill — after the cut, the remaining log's top surface sits exactly
+   * at bladeBedY. Material removed by the cut is [bladeBedY,
+   * bladeBedY + kerf] (kerf sawdust) plus everything above
+   * bladeBedY + kerf (the slab).
    */
   const blade = useMemo<BladeReadout>(() => {
-    if (plan.shape.length < 3 || remainingPlanks.length === 0) {
-      const r = plan.shape.length
-        ? projectionRange(plan.shape, bedUpInLog(plan.rotationDeg))
-        : { min: 0, max: 0 };
-      return { bladeAboveBed: 0, bladeBedY: 0, bedY: r.min, valid: false, kind: 'none' };
-    }
-    const n = bedUpInLog(plan.rotationDeg);
-    const shapeR = projectionRange(plan.shape, n);
     const kerf = plan.settings.kerf;
 
-    // Highest-top remaining plank whose top is still within (or at) the shape top.
-    let best: { pl: PlacedPlank; top: number; bottom: number } | null = null;
-    for (const pl of remainingPlanks) {
-      const r = projectionRange(plankCorners(pl), n);
-      if (r.max > shapeR.max + 1e-6) continue;
-      if (!best || r.max > best.top) {
-        best = { pl, top: r.max, bottom: r.min };
-      }
-    }
-    if (!best) {
-      return { bladeAboveBed: 0, bladeBedY: 0, bedY: shapeR.min, valid: false, kind: 'none' };
+    if (plan.shape.length < 3 || remainingPlanks.length === 0) {
+      const base = proposeCutAtRotation(plan.shape, remainingPlanks, plan.rotationDeg, kerf);
+      return { ...base, phase: base.kind === 'done' ? 'done' : 'none' };
     }
 
-    const isExposed = Math.abs(best.top - shapeR.max) < Math.max(1e-6, kerf * 0.1);
-    const proposed = isExposed ? best.bottom - kerf : best.top;
+    const squaringTarget = nextSquaringRotation(plan.cuts);
 
-    // A plank cut that would place the blade at or below the bed means the
-    // plank is already resting on the bed — there is nothing left below it
-    // to cut through. Treat the log as processed at this rotation.
-    if (isExposed && proposed <= shapeR.min + 1e-6) {
+    if (squaringTarget !== undefined) {
+      // === Phase A: squaring ===
+      const { doneCount } = squaringProgress(plan.cuts);
+      // Always describe the cut at whichever rotation the user is
+      // currently at so the height readout and EndView blade line
+      // track what they see. If auto-rotate is on, `commitStep` will
+      // swap in the recommended rotation before actually cutting.
+      const base = proposeCutAtRotation(plan.shape, remainingPlanks, plan.rotationDeg, kerf);
+      // The first cut on any still-round face is, by geometry, a slab
+      // (no plank can already have its top at the shape top of a round
+      // log). If the proposed kind came back as 'done' or 'none' at
+      // this rotation (e.g. no remaining plank projects into the face)
+      // we still advertise a slab — it's the user's job to trust the
+      // workflow for now. `bladeAboveBed` in that edge case stays with
+      // whatever `proposeCutAtRotation` returned, which is fine.
+      const current = normDeg(plan.rotationDeg);
+      const aligned = SQUARING_ROTATIONS.some(
+        (r) => r === squaringTarget && (Math.abs(current - r) <= 1 || Math.abs(current - r) >= 359)
+      );
       return {
-        // Blade sits just above the plank so the UI still makes sense.
-        bladeAboveBed: best.top - shapeR.min,
-        bladeBedY: best.top,
-        bedY: shapeR.min,
-        valid: false,
-        kind: 'done',
-        producingLabel: best.pl.label
+        ...base,
+        // Force the kind to slab during squaring — the first cut on any
+        // face of a round log is always a round-waste slab.
+        kind: base.kind === 'none' ? 'none' : 'slab',
+        producingLabel: undefined,
+        phase: 'squaring',
+        squaringIndex: doneCount + 1,
+        squaringTotal: SQUARING_TOTAL,
+        suggestRotationDeg: aligned ? undefined : squaringTarget
       };
     }
 
-    return {
-      bladeAboveBed: proposed - shapeR.min,
-      bladeBedY: proposed,
-      bedY: shapeR.min,
-      valid: true,
-      kind: isExposed ? 'plank' : 'slab',
-      producingLabel: isExposed ? best.pl.label : undefined
-    };
-  }, [plan.shape, remainingPlanks, plan.rotationDeg, plan.settings.kerf]);
+    // === Phase B: planking ===
+    const planningRotation = bestPlankingRotation(remainingPlanks, plan.shape);
+    const current = normDeg(plan.rotationDeg);
+    // Evaluate the cut at the user's ACTUAL rotation so the readout
+    // matches the illustration. We only surface `suggestRotationDeg`
+    // if the planner thinks another face is strictly better.
+    const base = proposeCutAtRotation(plan.shape, remainingPlanks, plan.rotationDeg, kerf);
+    const phase: BladeReadout['phase'] = base.kind === 'done' ? 'done' : 'planking';
+    const suggest =
+      planningRotation !== undefined &&
+      Math.abs(current - planningRotation) > 1 &&
+      Math.abs(current - planningRotation) < 359
+        ? planningRotation
+        : undefined;
+    return { ...base, phase, suggestRotationDeg: suggest };
+  }, [plan.shape, remainingPlanks, plan.rotationDeg, plan.settings.kerf, plan.cuts]);
 
   /**
    * Step cut: the blade bottom (bladeBedY) is the new shape top. Clip the
@@ -305,10 +547,24 @@ export function usePlan(): UsePlan {
    * For a plank cut, the plank being produced is the one whose bottom edge
    * sits at or above `bladeBedY + kerf` (i.e. the plank was wholly inside
    * the removed slab). For a slab cut, no plank is produced.
+   *
+   * Auto-rotate during squaring: when `settings.autoRotateForSquaring` is
+   * on and we're still in Phase A after this cut, we rotate the log to
+   * the next canonical face *inside the same setPlan call*. The sawyer's
+   * mental model is "cut, then the log turns so the next face is up" —
+   * matching the physical workflow where they'd drop the supports and
+   * flip the log 90° before setting up the next cut. Both the cut and
+   * the rotation share one undo snapshot, so ↑ Undo restores the pre-
+   * cut state cleanly.
+   *
+   * Auto-rotate is strictly a Phase A (squaring) feature. Once the cant
+   * is squared, rotation stays fully manual so the sawyer can empty one
+   * stack face before deciding where to go next.
    */
   const commitStep = () => {
     setPlan((p) => {
       if (!blade.valid) return p;
+
       pushHistory(p);
       const n = bedUpInLog(p.rotationDeg);
       const newTop = blade.bladeBedY;
@@ -319,6 +575,11 @@ export function usePlan(): UsePlan {
 
       if (blade.kind === 'plank') {
         const threshold = newTop + p.settings.kerf;
+        // The cut face is the chord of the pre-clip shape where the
+        // cut line `p·n = newTop` intersects it — the new straight
+        // boundary the cut introduces. Computed once per step and
+        // attached to every plank produced by the step (typically one).
+        const faceChord = convexChord(p.shape, n, newTop);
         for (const pl of remainingPlanks) {
           const corners = plankCorners(pl);
           const r = projectionRange(corners, n);
@@ -329,7 +590,13 @@ export function usePlan(): UsePlan {
               specId: pl.specId,
               label: pl.label,
               polygon: corners,
-              sequence: pl.sequence
+              sequence: pl.sequence,
+              // Freeze the shape as it was when this plank came off the log.
+              // The edging guide uses this so each produced plank keeps its
+              // real trim values (reflecting earlier squaring cuts) instead
+              // of being re-evaluated against the worst-case round log.
+              shapeAtCut: p.shape,
+              cutFace: faceChord ?? undefined
             });
             producedIds.push(id);
             break;
@@ -337,19 +604,68 @@ export function usePlan(): UsePlan {
         }
       }
 
-      const noteKind =
-        blade.kind === 'plank' ? `Plank cut → ${blade.producingLabel}` : 'Slab cut (round waste)';
+      // Label distinguishes squaring slabs (part of the first-four
+      // workflow) from waste slabs between planks so the cut history
+      // and the NEXT pill can differ cosmetically.
+      let noteKind: string;
+      if (blade.kind === 'plank') {
+        noteKind = `Plank cut → ${blade.producingLabel}`;
+      } else if (blade.phase === 'squaring' && blade.squaringIndex && blade.squaringTotal) {
+        noteKind = `Squaring slab (${blade.squaringIndex} of ${blade.squaringTotal})`;
+      } else {
+        noteKind = 'Slab cut (round waste)';
+      }
       const cut: Cut = {
         y: blade.bladeBedY,
         rotationDeg: p.rotationDeg,
         note: `${p.rotationDeg.toFixed(0)}°: ${noteKind}`,
         producedPlankIds: producedIds
       };
+      const nextCuts = [...p.cuts, cut];
+
+      // Post-cut auto-rotate: only fires during Phase A with the setting
+      // enabled. Three cases:
+      //  1. Still squaring (nextSquaringRotation is defined): rotate to
+      //     that next canonical face so the sawyer sees the next setup.
+      //  2. Just completed squaring (nextSquaringRotation is undefined
+      //     but we're currently in the squaring phase): rotate straight
+      //     into the best planking face so the sawyer can keep tapping
+      //     Cut without manually spinning the log. Without this, the
+      //     log would be left at 270° and the sawyer would have to
+      //     rotate back to (typically) 0° before the first plank cut.
+      //  3. Already past squaring (no-op — rotation stays manual).
+      let nextRotation = p.rotationDeg;
+      if (p.settings.autoRotateForSquaring && blade.phase === 'squaring') {
+        const upcoming = nextSquaringRotation(nextCuts);
+        if (upcoming !== undefined) {
+          nextRotation = upcoming;
+        } else {
+          // Squaring just finished on this cut. Compute the best
+          // planking face against the POST-cut shape + remaining
+          // planks (remaining excludes the plank produced by this
+          // step, if any — although squaring slabs don't produce
+          // planks in practice, this is the defensive form). Falls
+          // back to the current rotation if there's no clear winner.
+          const producedNowIds = new Set(producedNow.map((p) => p.id));
+          const remainingAfterCut = remainingPlanks.filter(
+            (pl) =>
+              !producedNow.some(
+                (pr) => pr.sequence === pl.sequence && producedNowIds.has(pr.id)
+              )
+          );
+          const planking = bestPlankingRotation(remainingAfterCut, newShape);
+          if (planking !== undefined) {
+            nextRotation = planking;
+          }
+        }
+      }
+
       return {
         ...p,
+        rotationDeg: nextRotation,
         shape: newShape,
         produced: [...p.produced, ...producedNow],
-        cuts: [...p.cuts, cut]
+        cuts: nextCuts
       };
     });
   };
@@ -371,7 +687,11 @@ export function usePlan(): UsePlan {
         specId: target.specId,
         label: target.label,
         polygon: plankCorners(target),
-        sequence: target.sequence
+        sequence: target.sequence,
+        // Final plank lifts off whatever shape is currently on the mill —
+        // no further clip happens, so the live shape is also the cut-time
+        // shape for edging purposes.
+        shapeAtCut: p.shape
       };
       const cut: Cut = {
         y: blade.bladeBedY,
@@ -446,6 +766,11 @@ export function usePlan(): UsePlan {
    * Cone detection: resolved once two committed cuts differ in rotation by
    * 180° (±1°). Until then, the sawyer should compensate by lowering the
    * root-side support.
+   *
+   * `bedFlat` is a separate, stronger signal: if the log is currently
+   * resting on a flat cut face it can't roll, so cone compensation is
+   * irrelevant regardless of which rotations we've cut at. The banner
+   * hides entirely in that case.
    */
   const cone = useMemo<ConeState>(() => {
     const angles = plan.cuts.map((c) => ((c.rotationDeg % 360) + 360) % 360);
@@ -458,9 +783,13 @@ export function usePlan(): UsePlan {
       }
     }
     const drop = resolved ? 0 : rootLowering(plan.log);
-    return { resolved, rootDropMm: drop };
+    const bedUp = bedUpInLog(plan.rotationDeg);
+    const bedFlat = polygonHasFlatFace(plan.shape, bedUp);
+    return { resolved, rootDropMm: drop, bedFlat };
   }, [
     plan.cuts,
+    plan.shape,
+    plan.rotationDeg,
     plan.log.rootSideDiameter,
     plan.log.topSideDiameter,
     plan.log.supportInset,

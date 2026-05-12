@@ -1,8 +1,8 @@
 import { rootEndDiameter, designDiameter } from '../core/taper';
 import { toolName } from '../core/tool';
 import { computePlankTrim } from '../core/trim';
-import type { PlacedPlank, PlanState, Vec2 } from '../core/types';
-import type { BladeReadout } from '../state/usePlan';
+import type { PlacedPlank, PlanState, ProducedPlank, Vec2 } from '../core/types';
+import { initialShape, type BladeReadout } from '../state/usePlan';
 
 interface Props {
   plan: PlanState;
@@ -56,8 +56,28 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
 
   const shapePath = plan.shape.length ? pathFromPoints(plan.shape.map(logToSvg)) : '';
 
+  // Edging is a POST-PROCESS: after a plank is sawn off the slab, the
+  // sawyer still needs to see its wane edges so they can edge it to the
+  // target width later.
+  //
+  // - "+N" trim indicators use `pp.shapeAtCut` (the log cross-section
+  //   at the moment the plank was sawn), which correctly reflects any
+  //   earlier squaring cuts. `plan.shape` has since been clipped past
+  //   the plank's y-range and would give zero.
+  // - Brown bark-ring wedges use the same `shapeAtCut` polygons — bark
+  //   only physically remained beside a plank where the log material
+  //   did at cut time, so a plank cut from an already-squared cant has
+  //   no bark on its squared sides.
+  //
+  // For legacy plans saved before `shapeAtCut` existed we fall back to
+  // the original round log (worst case) so the view still renders.
+  const originalShape = initialShape(plan.log);
+  const shapeAtCutFor = (pp: ProducedPlank): Vec2[] =>
+    pp.shapeAtCut && pp.shapeAtCut.length >= 3 ? pp.shapeAtCut : originalShape;
+
   // Stable id so clip paths don't collide between multiple EndView instances.
   const clipId = `shape-clip-${rotation.toFixed(0)}`;
+  const barkClipId = `bark-clip-${rotation.toFixed(0)}`;
   const barkId = `bark-ring-${plan.settings.barkThickness}`;
 
   return (
@@ -73,6 +93,29 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
           {shapePath && (
             <clipPath id={clipId}>
               <path d={shapePath} />
+            </clipPath>
+          )}
+          {/*
+            Bark clip = current shape ∪ each produced plank's `shapeAtCut`
+            polygon. Multiple paths inside a clipPath union together, so
+            bark remains visible exactly where log material was present
+            when each plank came off — i.e. the bark wedges travel with
+            the produced plank, but squared sides (cut earlier) show no
+            bark, matching physical reality.
+          */}
+          {shapePath && (
+            <clipPath id={barkClipId}>
+              <path d={shapePath} />
+              {plan.produced.map((pp) => {
+                const poly = shapeAtCutFor(pp);
+                if (poly.length < 3) return null;
+                return (
+                  <path
+                    key={`bark-shape-${pp.id}`}
+                    d={pathFromPoints(poly.map(logToSvg))}
+                  />
+                );
+              })}
             </clipPath>
           )}
           {/*
@@ -122,7 +165,7 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
           Using a mask keeps the edges crisp without polygon math.
         */}
         {shapePath && bark > 0 && (
-          <g clipPath={`url(#${clipId})`}>
+          <g clipPath={`url(#${barkClipId})`}>
             <rect
               x={0}
               y={0}
@@ -149,8 +192,52 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
             (acc, p) => ({ x: acc.x + p.x / pts.length, y: acc.y + p.y / pts.length }),
             { x: 0, y: 0 }
           );
+
+          // Produced planks still need edging — it's a post-process, so
+          // keep showing the "+N" trim indicators as a reminder. Compute
+          // against the shape snapshotted at the moment the plank was
+          // sawn off (reflects any earlier squaring cuts); fall back to
+          // the original log shape for plans saved before the snapshot
+          // field existed.
+          const spec = plan.planks.find((pl) => pl.sequence === pp.sequence);
+          const trim = spec
+            ? computePlankTrim(shapeAtCutFor(pp), spec)
+            : { left: 0, right: 0 };
+          const showLeft = spec != null && trim.left >= 5;
+          const showRight = spec != null && trim.right >= 5;
+          const trimFontPx = spec
+            ? Math.max(8, Math.min(11, spec.thickness * scale * 0.28))
+            : 10;
+          const leftStart = spec ? logToSvg({ x: spec.x - spec.width / 2, y: spec.y }) : null;
+          const leftEnd = spec
+            ? logToSvg({ x: spec.x - spec.width / 2 - trim.left, y: spec.y })
+            : null;
+          const rightStart = spec ? logToSvg({ x: spec.x + spec.width / 2, y: spec.y }) : null;
+          const rightEnd = spec
+            ? logToSvg({ x: spec.x + spec.width / 2 + trim.right, y: spec.y })
+            : null;
+
           return (
             <g key={pp.id}>
+              {/* Shape-at-cut outline: the log silhouette at the moment
+                  this plank was sawn off. Drawn behind the plank fill so
+                  only the portion outside the plank rectangle is visible
+                  — i.e. the curved arcs that bound the wane wedges on
+                  the plank's sides, and any earlier cut-face flats.
+                  Gives every produced plank a consistent "enclosed wane"
+                  appearance regardless of what later cuts have done to
+                  `plan.shape`. */}
+              {pp.shapeAtCut && pp.shapeAtCut.length >= 3 && (
+                <path
+                  d={pathFromPoints(pp.shapeAtCut.map(logToSvg))}
+                  fill="none"
+                  stroke="#3f2815"
+                  strokeWidth={1.2}
+                  strokeLinejoin="round"
+                  opacity={0.85}
+                />
+              )}
+
               <path
                 d={pathFromPoints(pts)}
                 fill="#d5e6c6"
@@ -160,6 +247,26 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
                 style={{ paintOrder: 'stroke fill' }}
               />
               <path d={pathFromPoints(pts)} fill="none" stroke="#35671e" strokeWidth={1} />
+
+              {/* Cut-face line: straight edge added to the remaining log
+                  when this plank was freed. Drawing it explicitly per
+                  produced plank means every plank shows its cut boundary
+                  in the log silhouette, regardless of whether later cuts
+                  have since clipped it away from `plan.shape`. Coloured
+                  the same dark brown as the main shape stroke so it
+                  reads as part of the log outline. */}
+              {pp.cutFace && (
+                <line
+                  x1={logToSvg(pp.cutFace[0]).x}
+                  y1={logToSvg(pp.cutFace[0]).y}
+                  x2={logToSvg(pp.cutFace[1]).x}
+                  y2={logToSvg(pp.cutFace[1]).y}
+                  stroke="#3f2815"
+                  strokeWidth={1.4}
+                  strokeLinecap="round"
+                />
+              )}
+
               <text
                 x={centroid.x}
                 y={centroid.y}
@@ -171,6 +278,67 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
               >
                 ✓ {pp.label}
               </text>
+
+              {/* Post-process edging reminders: same red dashed "+N"
+                  indicators used on remaining planks, so the sawyer keeps
+                  seeing which edges still need to be trimmed after the
+                  slab has come off. */}
+              {showLeft && leftStart && leftEnd && (
+                <g className="select-none pointer-events-none">
+                  <line
+                    x1={leftStart.x}
+                    y1={leftStart.y}
+                    x2={leftEnd.x}
+                    y2={leftEnd.y}
+                    stroke="#c01d10"
+                    strokeWidth={1}
+                    strokeDasharray="3 2"
+                    opacity={0.85}
+                  />
+                  <text
+                    x={(leftStart.x + leftEnd.x) / 2}
+                    y={leftStart.y - 4}
+                    textAnchor="middle"
+                    dominantBaseline="alphabetic"
+                    fontSize={trimFontPx}
+                    fill="#c01d10"
+                    fontWeight={600}
+                    stroke="#ffffff"
+                    strokeWidth={2.5}
+                    style={{ paintOrder: 'stroke' }}
+                  >
+                    +{trim.left.toFixed(0)}
+                  </text>
+                </g>
+              )}
+              {showRight && rightStart && rightEnd && (
+                <g className="select-none pointer-events-none">
+                  <line
+                    x1={rightStart.x}
+                    y1={rightStart.y}
+                    x2={rightEnd.x}
+                    y2={rightEnd.y}
+                    stroke="#c01d10"
+                    strokeWidth={1}
+                    strokeDasharray="3 2"
+                    opacity={0.85}
+                  />
+                  <text
+                    x={(rightStart.x + rightEnd.x) / 2}
+                    y={rightStart.y - 4}
+                    textAnchor="middle"
+                    dominantBaseline="alphabetic"
+                    fontSize={trimFontPx}
+                    fill="#c01d10"
+                    fontWeight={600}
+                    stroke="#ffffff"
+                    strokeWidth={2.5}
+                    style={{ paintOrder: 'stroke' }}
+                  >
+                    +{trim.right.toFixed(0)}
+                  </text>
+                </g>
+              )}
             </g>
           );
         })}
@@ -233,7 +401,9 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
 
               {/* Trim indicators — subtle dashed arrows with "+Nmm" label.
                   Colour-matched to the cone-compensation red so they read
-                  as "action needed" without screaming. */}
+                  as "action needed" without screaming. A white halo
+                  (paint-order: stroke) keeps the digits legible when they
+                  sit on top of the dashed line or the bark ring. */}
               {showLeft && (
                 <g className="select-none pointer-events-none">
                   <line
@@ -248,11 +418,15 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
                   />
                   <text
                     x={(leftStart.x + leftEnd.x) / 2}
-                    y={leftStart.y - 3}
+                    y={leftStart.y - 4}
                     textAnchor="middle"
+                    dominantBaseline="alphabetic"
                     fontSize={trimFontPx}
                     fill="#c01d10"
                     fontWeight={600}
+                    stroke="#ffffff"
+                    strokeWidth={2.5}
+                    style={{ paintOrder: 'stroke' }}
                   >
                     +{trim.left.toFixed(0)}
                   </text>
@@ -272,11 +446,15 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
                   />
                   <text
                     x={(rightStart.x + rightEnd.x) / 2}
-                    y={rightStart.y - 3}
+                    y={rightStart.y - 4}
                     textAnchor="middle"
+                    dominantBaseline="alphabetic"
                     fontSize={trimFontPx}
                     fill="#c01d10"
                     fontWeight={600}
+                    stroke="#ffffff"
+                    strokeWidth={2.5}
+                    style={{ paintOrder: 'stroke' }}
                   >
                     +{trim.right.toFixed(0)}
                   </text>
@@ -288,7 +466,15 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
 
         {/* Bed line (horizontal in bed frame) */}
         <line x1={pad / 2} x2={size - pad / 2} y1={bedSvgY} y2={bedSvgY} stroke="#44403c" strokeWidth={1.4} />
-        <text x={pad / 2 + 2} y={bedSvgY + 14} fontSize={11} fill="#44403c">
+        <text
+          x={pad / 2 + 2}
+          y={bedSvgY + 14}
+          fontSize={11}
+          fill="#44403c"
+          stroke="#ffffff"
+          strokeWidth={2.5}
+          style={{ paintOrder: 'stroke' }}
+        >
           bed
         </text>
 
@@ -337,6 +523,9 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
               fontWeight={600}
               textAnchor="end"
               fill="#e42313"
+              stroke="#ffffff"
+              strokeWidth={2.5}
+              style={{ paintOrder: 'stroke' }}
             >
               {toolName(plan.settings)}
             </text>
@@ -356,6 +545,9 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
                 dominantBaseline="central"
                 fontSize={13}
                 fontWeight={700}
+                stroke="#ffffff"
+                strokeWidth={3}
+                style={{ paintOrder: 'stroke' }}
               >
                 {blade.bladeAboveBed.toFixed(0)} mm
               </text>
@@ -374,7 +566,16 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
             strokeWidth={2}
             strokeLinecap="round"
           />
-          <text x={0} y={-rRoot - 12} textAnchor="middle" fontSize={12} fill="#1a5ca8">
+          <text
+            x={0}
+            y={-rRoot - 12}
+            textAnchor="middle"
+            fontSize={12}
+            fill="#1a5ca8"
+            stroke="#ffffff"
+            strokeWidth={2.5}
+            style={{ paintOrder: 'stroke' }}
+          >
             top {rotation.toFixed(0)}°
           </text>
         </g>
