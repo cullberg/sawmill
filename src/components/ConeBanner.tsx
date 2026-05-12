@@ -8,67 +8,109 @@ interface Props {
 }
 
 /**
- * Compact taper-compensation notice. Appears only while the cone is
- * still an open question:
- *   - active  : a positive root-side lowering is required (log still
- *               rolls freely on round wood). Amber accent + a side-view
- *               figure of the log tilted on level supports, with an
- *               amber arrow under the root support showing the drop
- *               needed. Amber is used instead of the app's primary
- *               colour so warnings stay visually distinct from
- *               primary-action (forest green) and physical-saw
- *               (signal red) contexts.
- *   - no-drop : measurements match or root is smaller — no compensation
- *               needed, but the sawyer still hasn't cut a reference face
- *               to close the matter.
- * Once either the cone has been resolved (two cuts 180° apart) or the
- * log is resting on a flat cut face it can't roll, the banner removes
- * itself entirely — see the early return in the component body.
+ * Compact taper-compensation notice. Renders in one of four states,
+ * but ALWAYS occupies the same vertical footprint so the EndView below
+ * never jumps up or down when the cone state changes (e.g. the sawyer
+ * rotates the log onto a flat face and `bedFlat` flips). Jumping
+ * content is actively irritating on a workshop tablet where the
+ * sawyer's eye is locked on the EndView between cuts.
  *
- * The taper of the drawn log is proportional to the actual
- * `rootSideDiameter` / `topSideDiameter` so the illustration reads
- * consistently with what the sawyer measured.
+ * States:
+ *   - active   : a positive root-side lowering is required (log still
+ *                rolls freely on round wood). Amber accent + side-view
+ *                figure of the log tilted on level supports, amber
+ *                arrow under the root support showing the drop.
+ *                Amber is distinct from forest (primaries) and signal-
+ *                red (physical-saw drawings).
+ *   - noDrop   : measurements match or root is smaller — no drop
+ *                needed, but the sawyer still hasn't cut a reference
+ *                face to close the matter. Neutral stone-grey.
+ *   - bedFlat  : log currently rests on a flat cut face and can't
+ *                roll. Cone question suspended. Neutral stone-grey.
+ *   - resolved : two cuts 180° apart have been made — the pith is
+ *                formally horizontal. Forest-green confirmation so the
+ *                sawyer gets positive feedback that the cone work is
+ *                done and can stop worrying about it.
+ *
+ * The taper of the drawn log (active / noDrop variants) is
+ * proportional to the actual `rootSideDiameter` / `topSideDiameter`
+ * so the illustration reads consistently with what the sawyer
+ * measured.
  */
 export function ConeBanner({ cone, log }: Props) {
-  // Hide the banner once the cone question is moot:
-  //   - `resolved` : two cuts 180° apart have been made, so the log now
-  //     has two parallel flat faces. Any further cuts inherit that
-  //     parallel reference regardless of current rotation, so the
-  //     compensation banner has done its job.
-  //   - `bedFlat`  : the log is currently resting on a flat cut face, so
-  //     it can't roll. Useful when the cone hasn't formally been
-  //     "resolved" (e.g. only one cut made so far) but the sawyer has
-  //     flipped the log onto that flat face.
-  // Either condition alone is enough to suppress the advice.
-  if (cone.resolved || cone.bedFlat) {
-    return null;
-  }
+  // Decide which state we're in. Order matters when more than one
+  // condition is true simultaneously:
+  //   - `resolved` trumps `bedFlat` because "you finished the cone
+  //     work" is strictly more informative than "the log happens to
+  //     rest flat right now".
+  //   - Between the two unresolved states (active / noDrop), a
+  //     positive drop requirement is the only actionable one.
+  const state: 'active' | 'noDrop' | 'bedFlat' | 'resolved' = cone.resolved
+    ? 'resolved'
+    : cone.bedFlat
+      ? 'bedFlat'
+      : cone.rootDropMm > 0
+        ? 'active'
+        : 'noDrop';
 
-  // Drop of zero happens when the two measured diameters are equal
-  // (parallel log), or the root-side support measurement is smaller than
-  // the top-side one (inverse taper at the root flare). In either case,
-  // nothing useful to tell the sawyer about support lowering yet, so keep
-  // the banner neutral instead of shouting "lower by 0 mm".
-  if (cone.rootDropMm <= 0) {
+  // Tailwind class tuples per state. `min-h-[52px]` keeps the
+  // footprint identical across all four so layout-shift vanishes.
+  // The arbitrary value is picked to match the active variant's
+  // intrinsic height (py-2 + figure SVG + line-height).
+  const shell = 'rounded-lg border px-3 py-2 text-sm min-h-[52px] flex items-center';
+  const body = 'flex items-center gap-2.5 flex-wrap w-full';
+
+  if (state === 'active') {
     return (
-      <div className="rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 flex items-center gap-2.5 text-sm">
-        <ConeFigure variant="noDrop" log={log} rootDropMm={0} />
-        <span className="font-medium text-stone-700">No support drop needed</span>
-        <span className="text-stone-600 hidden sm:inline text-xs">
-          — measurements match or root is smaller. Cut a reference face on each side to resolve the cone.
-        </span>
+      <div className={`${shell} border-amber-400 bg-amber-50`}>
+        <div className={body}>
+          <ConeFigure variant="active" log={log} rootDropMm={cone.rootDropMm} />
+          <span className="font-medium text-amber-900">Cone compensation:</span>
+          <span className="text-amber-800">
+            lower root-side support by{' '}
+            <span className="font-bold tabular-nums">{cone.rootDropMm.toFixed(0)} mm</span>
+          </span>
+        </div>
       </div>
     );
   }
 
+  if (state === 'noDrop') {
+    return (
+      <div className={`${shell} border-stone-300 bg-stone-50`}>
+        <div className={body}>
+          <ConeFigure variant="noDrop" log={log} rootDropMm={0} />
+          <span className="font-medium text-stone-700">No support drop needed</span>
+          <span className="text-stone-600 hidden sm:inline text-xs">
+            — measurements match or root is smaller. Cut a reference face on each side to resolve the cone.
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (state === 'bedFlat') {
+    return (
+      <div className={`${shell} border-stone-300 bg-stone-50`}>
+        <div className={body}>
+          <span aria-hidden className="text-stone-500 text-lg leading-none">⚖</span>
+          <span className="font-medium text-stone-700">Log resting flat</span>
+          <span className="text-stone-600 hidden sm:inline text-xs">
+            — it can't roll, so cone compensation is paused at this rotation.
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // state === 'resolved'
   return (
-    <div className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm">
-      <div className="flex items-center gap-2.5 flex-wrap">
-        <ConeFigure variant="active" log={log} rootDropMm={cone.rootDropMm} />
-        <span className="font-medium text-amber-900">Cone compensation:</span>
-        <span className="text-amber-800">
-          lower root-side support by{' '}
-          <span className="font-bold tabular-nums">{cone.rootDropMm.toFixed(0)} mm</span>
+    <div className={`${shell} border-forest-300 bg-forest-50`}>
+      <div className={body}>
+        <span aria-hidden className="text-forest-600 text-lg leading-none">✓</span>
+        <span className="font-medium text-forest-800">Cone resolved</span>
+        <span className="text-forest-700 hidden sm:inline text-xs">
+          — two cuts 180° apart, the pith is now horizontal between the supports.
         </span>
       </div>
     </div>
@@ -107,10 +149,10 @@ interface FigureProps {
  *   - For the `noDrop` variant both supports stay level too, but the
  *     log is near-cylindrical so the pith is near-horizontal.
  *
- * The resolved / bed-flat state has no figure at all: the parent
- * component removes the whole banner in that case, because the
- * compensation question has been settled and the sawyer doesn't need
- * another reminder in their peripheral vision.
+ * The resolved / bed-flat states don't use this figure at all — the
+ * parent component renders a smaller confirmation banner for those
+ * states (same footprint so layout doesn't shift, but no need for a
+ * proportional log drawing when the question is settled or paused).
  *
  * Nothing in this figure is meant to be measurable — it's a
  * proportional schematic so the banner state reads at a glance.

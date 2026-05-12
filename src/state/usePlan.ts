@@ -110,8 +110,22 @@ export interface UsePlan {
    * log dimensions, priority list and mill settings so the operator only has
    * to update whatever is different on the next log. Equivalent to `reset`
    * but with explicit "new log" semantics.
+   *
+   * If a `UsePlanOptions.onArchiveLog` callback was supplied, the current
+   * plan is first passed to it (before the clear) so the caller can push
+   * it into a history store. The callback only fires when the plan has
+   * both at least one committed cut AND at least one produced plank —
+   * avoids archiving a fresh, untouched log if the sawyer taps "Next
+   * log" by accident.
    */
   startNextLog: () => void;
+  /**
+   * Replace the current plan with a full PlanState snapshot (typically
+   * loaded from the log archive). Clears undo/redo history because the
+   * live history belongs to the previous plan and wouldn't make sense
+   * applied to a different log's shape.
+   */
+  loadSnapshot: (snapshot: PlanState) => void;
   canUndo: boolean;
   canRedo: boolean;
   blade: BladeReadout;
@@ -122,6 +136,16 @@ export interface UsePlan {
    * has been made. Signals the operator to load the next log.
    */
   logComplete: boolean;
+}
+
+/** Optional dependencies the hook collaborates with. */
+export interface UsePlanOptions {
+  /**
+   * Called with the current plan just before `startNextLog` clears it.
+   * Fires only when the plan looks finished (≥ 1 cut and ≥ 1 produced
+   * plank) so empty / abandoned plans don't pollute the archive.
+   */
+  onArchiveLog?: (plan: PlanState) => void;
 }
 
 // Initial shape = design-circle polygon centred at (0,0) in LOG frame.
@@ -360,7 +384,7 @@ function proposeCutAtRotation(
   };
 }
 
-export function usePlan(): UsePlan {
+export function usePlan(options: UsePlanOptions = {}): UsePlan {
   const [plan, setPlan] = useState<PlanState>(() => {
     const loaded = loadPlan();
     if (loaded && loaded.shape && loaded.shape.length > 0) return loaded;
@@ -376,7 +400,21 @@ export function usePlan(): UsePlan {
   const futureRef = useRef<MillSnapshot[]>([]);
   const [historyVersion, setHistoryVersion] = useState(0);
 
+  // Mirror the live plan into a ref so callbacks (e.g. `startNextLog`)
+  // can read the latest state without adding `plan` to their dep array
+  // — we want stable identities for the callbacks so React doesn't
+  // re-render consumers on every state tick.
+  const planRef = useRef(plan);
+  planRef.current = plan;
+
   const firstRunRef = useRef(true);
+  // When set, the NEXT run of the layout-recompute effect should
+  // treat the plan as already-complete and skip its wipe of
+  // cuts/produced/shape. Flipped to true by `loadSnapshot` so
+  // reopening an archived log keeps the snapshot's cuts and produced
+  // planks visible instead of having them zeroed out by the regular
+  // "input changed → reset" side-effect.
+  const suppressRecomputeWipeRef = useRef(false);
 
   // Recompute plan-frame plank layout whenever the log / settings / priority list changes.
   useEffect(() => {
@@ -393,6 +431,15 @@ export function usePlan(): UsePlan {
         planks: res.planks,
         shape: prev.shape && prev.shape.length > 0 ? prev.shape : initialShape(prev.log)
       }));
+      return;
+    }
+    if (suppressRecomputeWipeRef.current) {
+      // A snapshot load just landed. Adopt the freshly-computed
+      // `planks` (they're a pure function of log + settings + priority
+      // so this is effectively a no-op for a well-formed snapshot)
+      // but keep the snapshot's cuts / produced / shape intact.
+      suppressRecomputeWipeRef.current = false;
+      setPlan((prev) => ({ ...prev, planks: res.planks }));
       return;
     }
     setPlan((prev) => ({
@@ -801,10 +848,53 @@ export function usePlan(): UsePlan {
 
   const logComplete = remainingPlanks.length === 0 && plan.cuts.length > 0;
 
-  // `startNextLog` is intentionally the same operation as `reset` — the split
-  // exists so the UI can offer a distinct, reassuring label ("Next log") at
-  // the end of a job without the operator worrying they'll lose settings.
-  const startNextLog = reset;
+  /**
+   * `startNextLog` is `reset` + an optional archive hand-off. We fire
+   * the `onArchiveLog` callback from the OPTIONS passed to the hook
+   * (so the hook stays agnostic about the archive module itself), and
+   * only when the current plan has actual content worth archiving — at
+   * least one committed cut AND at least one produced plank. This
+   * avoids polluting the history with empty "I tapped reset by
+   * mistake" entries.
+   *
+   * Archive runs before state reset so the callback sees the plan as
+   * the sawyer saw it. The archive callback is synchronous and is
+   * expected to finish (or at least queue a setState) during the
+   * call; React's batching then lets both updates settle together.
+   */
+  const startNextLog = useCallback(() => {
+    const current = planRef.current;
+    const worthArchiving =
+      current.cuts.length > 0 && current.produced.length > 0;
+    if (worthArchiving && options.onArchiveLog) {
+      options.onArchiveLog(current);
+    }
+    reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options.onArchiveLog]);
+
+  /**
+   * Replace the live plan with a snapshot — used to "reopen" an
+   * archived completed log. Undo/redo history is wiped because its
+   * entries describe cuts on a different log's shape and replaying
+   * them on this one would crash or produce nonsense.
+   *
+   * Sets `suppressRecomputeWipeRef` so the layout-recompute effect
+   * that fires right after this state change keeps the snapshot's
+   * cuts / shape / produced intact. Without that flag, the effect
+   * would see a "new log" (dims changed) and zero everything out.
+   */
+  const loadSnapshot = useCallback((snapshot: PlanState) => {
+    // Deep-clone so later mutations to the live plan don't reach
+    // back into the caller's archive entry (which is also a frozen-
+    // by-convention JSON blob, but belt-and-braces is cheap here).
+    const clone: PlanState = JSON.parse(JSON.stringify(snapshot));
+    suppressRecomputeWipeRef.current = true;
+    setPlan(clone);
+    historyRef.current = [];
+    futureRef.current = [];
+    setHistoryVersion((v) => v + 1);
+  }, []);
 
   return {
     plan,
@@ -818,6 +908,7 @@ export function usePlan(): UsePlan {
     redo,
     reset,
     startNextLog,
+    loadSnapshot,
     canUndo,
     canRedo,
     blade,

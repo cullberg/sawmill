@@ -69,13 +69,20 @@ export function Collapsible({
     }
   }, [open, storageKey]);
 
-  // Listen for a global "please open this panel" event so other components
-  // (e.g. the "Next log" button) can programmatically reveal a pane without
-  // lifting all panel state into a parent. Detail: { id: string }.
+  // Listen for a global "please open/close this panel" event so other
+  // components (e.g. the "Next log" and "OK, back to cutting" buttons)
+  // can programmatically toggle a pane without lifting all panel state
+  // into a parent.
+  //
+  // Detail: { id: string; open?: boolean }. `open` defaults to true
+  // when absent so existing callers — which only ever wanted to open a
+  // panel — continue to work unchanged. Pass `open: false` to request a
+  // close.
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ id: string }>).detail;
-      if (detail?.id === id) setOpen(true);
+      const detail = (e as CustomEvent<{ id: string; open?: boolean }>).detail;
+      if (detail?.id !== id) return;
+      setOpen(detail.open ?? true);
     };
     window.addEventListener('sawmill:open-panel', handler as EventListener);
     return () => window.removeEventListener('sawmill:open-panel', handler as EventListener);
@@ -94,7 +101,7 @@ export function Collapsible({
           className="flex-1 flex items-center gap-2 text-left min-w-0"
         >
           <span
-            className={`inline-block text-stone-500 transition-transform ${
+            className={`inline-block text-forest-500 transition-transform ${
               open ? 'rotate-90' : ''
             }`}
             aria-hidden

@@ -4,11 +4,24 @@ import type { LogInput, Species } from '../core/types';
 interface Props {
   log: LogInput;
   onChange: (log: LogInput) => void;
+  /**
+   * Optional "I'm done with this panel" handler. When supplied, the
+   * form renders a forest-green OK button at the bottom. The parent
+   * is expected to close the Log-measurements collapsible and scroll
+   * back up to the Controls card so the sawyer can reach for the
+   * Cut button without hunting — mirror image of the "Start next log"
+   * flow that scrolls the other way.
+   *
+   * Disabled while the spacing input is invalid so the sawyer can't
+   * confirm an unusable log. Leaving it undefined hides the button
+   * entirely (keeps the form reusable in isolation, e.g. in tests).
+   */
+  onDone?: () => void;
 }
 
 const speciesOptions: Species[] = ['pine', 'spruce', 'birch'];
 
-export function LogForm({ log, onChange }: Props) {
+export function LogForm({ log, onChange, onDone }: Props) {
   const update = <K extends keyof LogInput>(key: K, value: LogInput[K]) => {
     onChange({ ...log, [key]: value });
   };
@@ -117,6 +130,37 @@ export function LogForm({ log, onChange }: Props) {
           ))}
         </select>
       </label>
+      {/* "OK, back to cutting" — closes this panel and scrolls the
+          Controls card into view so the sawyer lands on the Cut
+          button. The parent owns the actual scroll / close behaviour
+          (via App.tsx) so LogForm stays purely presentational. */}
+      {onDone && (
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={onDone}
+            disabled={spacingInvalid}
+            className={`w-full rounded-md py-2 font-semibold text-sm transition flex items-center justify-center gap-1.5 shadow-sm ${
+              spacingInvalid
+                ? 'bg-stone-200 text-stone-500 cursor-not-allowed'
+                : 'bg-forest-500 hover:bg-forest-600 text-white'
+            }`}
+            style={
+              spacingInvalid
+                ? { backgroundColor: '#e7e5e4', color: '#78716c' }
+                : { backgroundColor: '#35671e', color: '#ffffff' }
+            }
+            title={
+              spacingInvalid
+                ? 'Fix the support spacing first'
+                : 'Close this panel and jump back to the Cut button'
+            }
+          >
+            <span aria-hidden className="text-base leading-none">✓</span>
+            OK, back to cutting
+          </button>
+        </div>
+      )}
     </div>
   );
 }

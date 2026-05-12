@@ -1,3 +1,5 @@
+import { togglePanelAndScroll } from './panelScroll';
+
 interface Props {
   rotation: number;
   onRotateBy: (deg: number) => void;
@@ -105,31 +107,31 @@ export function Controls({
   /**
    * Completion flow: every planned plank is sawn. Swap the blade readout
    * for a celebration banner and promote "Next log" to the primary action
-   * so the sawyer knows exactly how to continue with a fresh log. We also
-   * broadcast a `sawmill:open-panel` event so the Log measurements pane
-   * expands automatically (helpful on small screens where it may have been
-   * collapsed to maximise illustration space).
+   * so the sawyer knows exactly how to continue with a fresh log. No
+   * confirmation dialog — by the time this button is visible the log is
+   * already fully sawn, so there's nothing to accidentally discard. The
+   * completed plan is auto-archived into Log history on the way out, so
+   * even a mis-tap is recoverable via the Reopen action in that panel.
+   *
+   * Uses `togglePanelAndScroll` instead of a raw setTimeout because the
+   * scroll target depends on the panel's POST-expand height: if the
+   * panel is currently collapsed (e.g. the previous log ended with
+   * "OK, back to cutting"), dispatching the open event and calling
+   * scrollIntoView in the same microtask would land on the PRE-expand
+   * position and scroll too little. The helper waits two animation
+   * frames so React's re-render and the browser's layout pass both
+   * finish before the scroll fires.
    */
   const handleNextLog = () => {
-    if (
-      !window.confirm(
-        'Start the next log? This clears cuts and sawn planks. Mill settings and priority list stay, log measurements remain ready to edit.'
-      )
-    ) {
-      return;
-    }
     onNextLog();
-    // Defer so the pane opens after the reset-triggered re-render.
-    setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent('sawmill:open-panel', { detail: { id: 'log' } })
-      );
-      document.getElementById('panel-log')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
+    togglePanelAndScroll('log', true, 'panel-log');
   };
 
   return (
-    <section className="bg-white rounded-xl p-4 shadow-sm space-y-3">
+    <section
+      id="panel-controls"
+      className="bg-white rounded-xl p-4 shadow-sm space-y-3 scroll-mt-4"
+    >
       {logComplete ? (
         /* === Completion state === */
         <>

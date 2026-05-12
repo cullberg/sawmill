@@ -250,6 +250,16 @@ export function HelpModal({ onClose }: Props) {
               settings and Preferred dimensions stay put — only the log data
               changes.
             </p>
+            <p>
+              The completed log is archived automatically into the{' '}
+              <b>Log history</b> panel in the sidebar — with its dimensions,
+              cuts, produced planks and yield. The archive keeps the last 50
+              logs and is stored in this browser only (no server, no account).
+              Expand the panel to see aggregate stats (total volume, per-size
+              plank totals), <b>Reopen</b> any past log into the planner,
+              delete individual entries, or <b>Export CSV</b> of everything for
+              your records.
+            </p>
           </Step>
 
           <Step n={8} title="Check your yield">
@@ -356,7 +366,7 @@ function Step({
             so we don't need an icon dependency. */}
         <span
           aria-hidden
-          className="text-steel-400 text-xs transition-transform group-open:rotate-90"
+          className="text-forest-500 text-xs transition-transform group-open:rotate-90"
         >
           ▶
         </span>

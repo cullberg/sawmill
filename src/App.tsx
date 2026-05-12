@@ -6,11 +6,14 @@ import { EdgingGuide } from './components/EdgingGuide';
 import { EndView } from './components/EndView';
 import { HelpModal } from './components/HelpModal';
 import { LogForm } from './components/LogForm';
+import { LogHistory } from './components/LogHistory';
+import { togglePanelAndScroll } from './components/panelScroll';
 import { PriorityList } from './components/PriorityList';
 import { PwaStatus } from './components/PwaStatus';
 import { SettingsForm } from './components/SettingsForm';
 import { SplashScreen, useSplashState } from './components/SplashScreen';
 import { Summary } from './components/Summary';
+import { useLogArchive } from './state/useLogArchive';
 import { usePlan } from './state/usePlan';
 
 /**
@@ -32,6 +35,14 @@ function useIsLargeScreen(): boolean {
 }
 
 export default function App() {
+  // The log archive lives outside of usePlan so its lifecycle is
+  // independent: reopening an archived log or resetting the current
+  // plan never touches the archive. usePlan calls `archivePlan` via
+  // the `onArchiveLog` option whenever a completed plan is cleared
+  // by `startNextLog` — so each completed log lands in the archive
+  // exactly once, without the UI having to coordinate the two.
+  const { archive, archivePlan, removeEntry, clearAll } = useLogArchive();
+
   const {
     plan,
     setLog,
@@ -44,13 +55,14 @@ export default function App() {
     redo,
     reset,
     startNextLog,
+    loadSnapshot,
     canUndo,
     canRedo,
     blade,
     cone,
     remainingPlanks,
     logComplete
-  } = usePlan();
+  } = usePlan({ onArchiveLog: archivePlan });
 
   const isLarge = useIsLargeScreen();
   const defaultOpen = isLarge;
@@ -75,6 +87,24 @@ export default function App() {
     plan.priorityList.length
   } enabled`;
   const settingsSummary = `kerf ${plan.settings.kerf} · bark ${plan.settings.barkThickness}`;
+
+  /**
+   * "OK, back to cutting" from the Log measurements panel: close the
+   * panel (so its real-estate returns to the illustration) and scroll
+   * the Controls card back into view so the Cut button is under the
+   * sawyer's thumb again. Mirror of the "Start next log" flow that
+   * scrolls the other way.
+   *
+   * Uses `togglePanelAndScroll` so the close → layout → scroll
+   * sequence is race-free: scrolling to `panel-controls` before the
+   * panel collapse has rendered would land on the pre-collapse
+   * position, shooting past the Controls card. The helper waits two
+   * animation frames so React's commit and the browser's layout
+   * pass both complete first.
+   */
+  const onLogMeasurementsDone = () => {
+    togglePanelAndScroll('log', false, 'panel-controls');
+  };
 
   return (
     <div className="min-h-screen bg-steel-50 text-steel-900">
@@ -130,6 +160,20 @@ export default function App() {
             producedCount={plan.produced.length}
             toolLabel={plan.settings.cuttingTool}
           />
+          {/* Log measurements sit immediately below the Controls card
+              so a fresh log's primary data-entry panel is the first
+              thing the sawyer sees after completing a log, without
+              having to glance across to the sidebar. Keeps the
+              illustration-first primary column intact. */}
+          <Collapsible
+            id="log"
+            title="Log measurements"
+            summary={logSummary}
+            defaultOpen={defaultOpen}
+            accent="wood"
+          >
+            <LogForm log={plan.log} onChange={setLog} onDone={onLogMeasurementsDone} />
+          </Collapsible>
           {/* The log report is useful but not essential mid-cut — tuck it
               behind a collapsible on every viewport so it never steals focus
               from the illustration. */}
@@ -158,16 +202,6 @@ export default function App() {
             sawing. On large screens they default to open. */}
         <div className="space-y-3 order-2">
           <Collapsible
-            id="log"
-            title="Log measurements"
-            summary={logSummary}
-            defaultOpen={defaultOpen}
-            accent="wood"
-          >
-            <LogForm log={plan.log} onChange={setLog} />
-          </Collapsible>
-
-          <Collapsible
             id="priority"
             title="Preferred dimensions"
             summary={prioritySummary}
@@ -189,6 +223,30 @@ export default function App() {
             accent="steel"
           >
             <SettingsForm settings={plan.settings} onChange={setSettings} />
+          </Collapsible>
+
+          {/* Log history: completed logs accumulate here (most recent
+              first) every time the sawyer taps "Start next log". The
+              panel is always collapsed by default so an empty archive
+              doesn't waste space; the summary line shows the count so
+              users know the panel has something in it without opening. */}
+          <Collapsible
+            id="history"
+            title="Log history"
+            summary={
+              archive.length === 0
+                ? 'no logs yet'
+                : `${archive.length} log${archive.length === 1 ? '' : 's'} archived`
+            }
+            defaultOpen={false}
+            accent="wood"
+          >
+            <LogHistory
+              archive={archive}
+              onRemove={removeEntry}
+              onClear={clearAll}
+              onReopen={(entry) => loadSnapshot(entry.plan)}
+            />
           </Collapsible>
         </div>
       </main>
