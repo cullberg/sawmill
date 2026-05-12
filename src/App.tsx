@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Collapsible } from './components/Collapsible';
 import { ConeBanner } from './components/ConeBanner';
 import { Controls } from './components/Controls';
+import { EdgingGuide } from './components/EdgingGuide';
 import { EndView } from './components/EndView';
 import { HelpModal } from './components/HelpModal';
 import { LogForm } from './components/LogForm';
@@ -119,6 +120,15 @@ export default function App() {
           {/* The log report is useful but not essential mid-cut — tuck it
               behind a collapsible on every viewport so it never steals focus
               from the illustration. */}
+          <Collapsible
+            id="edging"
+            title="Edging guide"
+            summary="Blade heights for the second-pass width trim"
+            defaultOpen={false}
+            accent="brand"
+          >
+            <EdgingGuide plan={plan} remainingPlanks={remainingPlanks} />
+          </Collapsible>
           <Collapsible
             id="summary"
             title="Log report"

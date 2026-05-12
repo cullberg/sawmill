@@ -1,4 +1,5 @@
 import { rootEndDiameter, designDiameter } from '../core/taper';
+import { computePlankTrim } from '../core/trim';
 import type { PlacedPlank, PlanState, Vec2 } from '../core/types';
 import type { BladeReadout } from '../state/usePlan';
 
@@ -186,6 +187,24 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
           const pts = corners.map(logToSvg);
           const centre = logToSvg({ x: p.x, y: p.y });
           const fontPx = Math.max(10, Math.min(14, Math.min(p.width, p.thickness) * scale * 0.35));
+
+          // Wane trim indicators: show how far the current log shape
+          // extends beyond the plank's target rectangle on each side. A
+          // 5 mm threshold keeps the illustration from turning into noise
+          // for planks that are already within rounding error of flush.
+          const trim = computePlankTrim(plan.shape, p);
+          const showLeft = trim.left >= 5;
+          const showRight = trim.right >= 5;
+          const trimFontPx = Math.max(8, Math.min(11, p.thickness * scale * 0.28));
+
+          // Endpoints for trim indicators in LOG frame. We draw from the
+          // plank's edge (at the plank's centreline y for readability)
+          // outward toward the shape boundary.
+          const leftStart = logToSvg({ x: p.x - hx, y: p.y });
+          const leftEnd = logToSvg({ x: p.x - hx - trim.left, y: p.y });
+          const rightStart = logToSvg({ x: p.x + hx, y: p.y });
+          const rightEnd = logToSvg({ x: p.x + hx + trim.right, y: p.y });
+
           return (
             <g key={`rem-${i}`}>
               {/* Kerf halo */}
@@ -210,6 +229,58 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
               >
                 {p.sequence}. {p.label}
               </text>
+
+              {/* Trim indicators — subtle dashed arrows with "+Nmm" label.
+                  Colour-matched to the cone-compensation red so they read
+                  as "action needed" without screaming. */}
+              {showLeft && (
+                <g className="select-none pointer-events-none">
+                  <line
+                    x1={leftStart.x}
+                    y1={leftStart.y}
+                    x2={leftEnd.x}
+                    y2={leftEnd.y}
+                    stroke="#c01d10"
+                    strokeWidth={1}
+                    strokeDasharray="3 2"
+                    opacity={0.85}
+                  />
+                  <text
+                    x={(leftStart.x + leftEnd.x) / 2}
+                    y={leftStart.y - 3}
+                    textAnchor="middle"
+                    fontSize={trimFontPx}
+                    fill="#c01d10"
+                    fontWeight={600}
+                  >
+                    +{trim.left.toFixed(0)}
+                  </text>
+                </g>
+              )}
+              {showRight && (
+                <g className="select-none pointer-events-none">
+                  <line
+                    x1={rightStart.x}
+                    y1={rightStart.y}
+                    x2={rightEnd.x}
+                    y2={rightEnd.y}
+                    stroke="#c01d10"
+                    strokeWidth={1}
+                    strokeDasharray="3 2"
+                    opacity={0.85}
+                  />
+                  <text
+                    x={(rightStart.x + rightEnd.x) / 2}
+                    y={rightStart.y - 3}
+                    textAnchor="middle"
+                    fontSize={trimFontPx}
+                    fill="#c01d10"
+                    fontWeight={600}
+                  >
+                    +{trim.right.toFixed(0)}
+                  </text>
+                </g>
+              )}
             </g>
           );
         })}
