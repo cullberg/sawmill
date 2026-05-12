@@ -92,7 +92,7 @@ export function LogForm({ log, onChange }: Props) {
       <div
         className={`rounded-md px-3 py-2 text-xs flex items-center justify-between border ${
           spacingInvalid
-            ? 'bg-brand-50 border-brand-200 text-brand-800'
+            ? 'bg-amber-50 border-amber-200 text-amber-900'
             : 'bg-stone-50 border-stone-200 text-stone-600'
         }`}
       >
@@ -108,7 +108,7 @@ export function LogForm({ log, onChange }: Props) {
         <select
           value={log.species}
           onChange={(e) => update('species', e.target.value as Species)}
-          className="mt-1 block w-full rounded-md border-stone-300 bg-stone-50 px-2 py-1.5 border focus:border-brand-500 focus:ring-brand-500"
+          className="mt-1 block w-full rounded-md border-stone-300 bg-stone-50 px-2 py-1.5 border focus:border-forest-500 focus:ring-forest-500"
         >
           {speciesOptions.map((s) => (
             <option key={s} value={s}>
@@ -162,12 +162,12 @@ function CmField({
           const mm = wholeCm ? Math.round(cm) * 10 : Math.round(cm * 10);
           onChangeMm(mm);
         }}
-        className="mt-1 block w-full rounded-md border-stone-300 bg-stone-50 px-2 py-1.5 border focus:border-brand-500 focus:ring-brand-500"
+        className="mt-1 block w-full rounded-md border-stone-300 bg-stone-50 px-2 py-1.5 border focus:border-forest-500 focus:ring-forest-500"
       />
       {hint && (
         <span
           className={`text-xs ${
-            hintTone === 'warn' ? 'text-brand-700 font-medium' : 'text-stone-500'
+            hintTone === 'warn' ? 'text-amber-800 font-medium' : 'text-stone-500'
           }`}
         >
           {hint}

@@ -59,13 +59,13 @@ export function SplashScreen({ onDismiss, onShowHelp }: Props) {
           </div>
 
           <ul className="grid sm:grid-cols-3 gap-2 text-xs text-steel-700">
-            <li className="rounded-lg bg-brand-50 border border-brand-200 px-3 py-2">
-              <div className="font-semibold text-brand-800">Measure</div>
+            <li className="rounded-lg bg-wood-50 border border-wood-200 px-3 py-2">
+              <div className="font-semibold text-wood-700">Measure</div>
               the log at the two supports — enter diameters in cm.
             </li>
             <li className="rounded-lg bg-motor-50 border border-motor-200 px-3 py-2">
               <div className="font-semibold text-motor-700">Read</div>
-              the blade height off the big red dimension every cut.
+              the blade height off the big green dimension every cut.
             </li>
             <li className="rounded-lg bg-forest-50 border border-forest-200 px-3 py-2">
               <div className="font-semibold text-forest-800">Cut</div>
@@ -77,15 +77,15 @@ export function SplashScreen({ onDismiss, onShowHelp }: Props) {
             <button
               type="button"
               onClick={onShowHelp}
-              className="text-sm text-steel-600 hover:text-brand-600 underline underline-offset-2 sm:mr-auto"
+              className="text-sm text-steel-600 hover:text-forest-700 underline underline-offset-2 sm:mr-auto"
             >
               How does it work?
             </button>
             <button
               type="button"
               onClick={onDismiss}
-              className="w-full sm:w-auto rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-semibold px-6 py-3 shadow-sm transition"
-              style={{ backgroundColor: '#e42313', color: '#ffffff' }}
+              className="w-full sm:w-auto rounded-lg bg-forest-500 hover:bg-forest-600 text-white font-semibold px-6 py-3 shadow-sm transition"
+              style={{ backgroundColor: '#35671e', color: '#ffffff' }}
               autoFocus
             >
               Get started →

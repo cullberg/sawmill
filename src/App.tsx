@@ -80,15 +80,22 @@ export default function App() {
     <div className="min-h-screen bg-steel-50 text-steel-900">
       {/* Floating help button — always reachable without eating precious
           vertical space in the main layout. `fixed` so it stays visible
-          when the user scrolls the long sidebar on small screens. */}
+          when the user scrolls the long sidebar on small screens.
+
+          Forest-green pill (matching the primary Cut button) with a
+          visible "Help" label on sm+ screens so new users don't have
+          to guess what the "?" means; narrow-mobile viewports keep
+          just the "?" to save space. */}
       <button
         type="button"
         onClick={() => setHelpOpen(true)}
         aria-label="Open help"
         title="How does the planner work?"
-        className="fixed top-3 right-3 z-40 w-10 h-10 rounded-full bg-white shadow-md border border-steel-200 text-steel-700 hover:text-brand-600 hover:border-brand-300 font-bold text-lg flex items-center justify-center"
+        className="fixed top-3 right-3 z-40 rounded-full bg-forest-500 hover:bg-forest-600 text-white shadow-md font-semibold flex items-center gap-1.5 px-3 h-10 text-sm"
+        style={{ backgroundColor: '#35671e', color: '#ffffff' }}
       >
-        ?
+        <span aria-hidden className="text-base leading-none">?</span>
+        <span className="hidden sm:inline">Help</span>
       </button>
 
       <main className="max-w-6xl mx-auto p-3 sm:p-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -131,7 +138,7 @@ export default function App() {
             title="Edging guide"
             summary={`${plan.settings.cuttingTool === 'chain' ? 'Chain' : 'Blade'} heights for the second-pass width trim`}
             defaultOpen={false}
-            accent="brand"
+            accent="forest"
           >
             <EdgingGuide plan={plan} remainingPlanks={remainingPlanks} />
           </Collapsible>
@@ -165,7 +172,7 @@ export default function App() {
             title="Preferred dimensions"
             summary={prioritySummary}
             defaultOpen={defaultOpen}
-            accent="brand"
+            accent="forest"
           >
             <PriorityList
               list={plan.priorityList}

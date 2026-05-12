@@ -11,9 +11,13 @@ interface Props {
  * Compact taper-compensation notice. Appears only while the cone is
  * still an open question:
  *   - active  : a positive root-side lowering is required (log still
- *               rolls freely on round wood). Red accent + a side-view
- *               figure of the log tilted on level supports, with a red
- *               arrow under the root support showing the drop needed.
+ *               rolls freely on round wood). Amber accent + a side-view
+ *               figure of the log tilted on level supports, with an
+ *               amber arrow under the root support showing the drop
+ *               needed. Amber is used instead of the app's primary
+ *               colour so warnings stay visually distinct from
+ *               primary-action (forest green) and physical-saw
+ *               (signal red) contexts.
  *   - no-drop : measurements match or root is smaller — no compensation
  *               needed, but the sawyer still hasn't cut a reference face
  *               to close the matter.
@@ -58,11 +62,11 @@ export function ConeBanner({ cone, log }: Props) {
   }
 
   return (
-    <div className="rounded-lg border border-brand-400 bg-brand-50 px-3 py-2 text-sm">
+    <div className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm">
       <div className="flex items-center gap-2.5 flex-wrap">
         <ConeFigure variant="active" log={log} rootDropMm={cone.rootDropMm} />
-        <span className="font-medium text-brand-800">Cone compensation:</span>
-        <span className="text-brand-700">
+        <span className="font-medium text-amber-900">Cone compensation:</span>
+        <span className="text-amber-800">
           lower root-side support by{' '}
           <span className="font-bold tabular-nums">{cone.rootDropMm.toFixed(0)} mm</span>
         </span>
@@ -164,7 +168,7 @@ function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
   const yPithLogRoot = pithAt(xLogRoot);
   const yPithLogTop = pithAt(xLogTop);
 
-  const accent = variant === 'active' ? '#c01d10' : '#78716c';
+  const accent = variant === 'active' ? '#b45309' : '#78716c';
   const axisColor = accent;
 
   // Log silhouette (four points of the trapezoid, walking CW in SVG):

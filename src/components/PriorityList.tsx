@@ -59,14 +59,14 @@ export function PriorityList({ list, strategy, onChange }: Props) {
         <div className="flex items-center gap-1">
           <button
             onClick={() => setHideDisabled((v) => !v)}
-            className="px-2 py-1 text-xs text-stone-600 hover:text-brand-600 border border-stone-300 rounded-md"
+            className="px-2 py-1 text-xs text-stone-600 hover:text-forest-700 border border-stone-300 rounded-md"
             title={hideDisabled ? 'Show all rows' : 'Hide disabled rows'}
           >
             {hideDisabled ? `Show all (${list.length})` : `Hide disabled`}
           </button>
           <button
             onClick={add}
-            className="px-2 py-1 text-sm bg-brand-500 text-white rounded-md hover:bg-brand-600"
+            className="px-2 py-1 text-sm bg-forest-500 text-white rounded-md hover:bg-forest-600"
           >
             + Add
           </button>
@@ -75,16 +75,16 @@ export function PriorityList({ list, strategy, onChange }: Props) {
       <div className="flex items-center justify-between text-xs text-stone-500">
         <button
           onClick={restoreDefaults}
-          className="hover:text-brand-600 underline"
+          className="hover:text-forest-700 underline"
           title="Replace the list with the built-in default dimensions"
         >
           ↺ Restore defaults
         </button>
         <div className="flex gap-2">
-          <button onClick={() => enableAll(true)} className="hover:text-brand-600 underline">
+          <button onClick={() => enableAll(true)} className="hover:text-forest-700 underline">
             enable all
           </button>
-          <button onClick={() => enableAll(false)} className="hover:text-brand-600 underline">
+          <button onClick={() => enableAll(false)} className="hover:text-forest-700 underline">
             none
           </button>
         </div>
@@ -130,7 +130,7 @@ export function PriorityList({ list, strategy, onChange }: Props) {
               type="checkbox"
               checked={spec.enabled}
               onChange={(e) => update(spec.id, { enabled: e.target.checked })}
-              className="h-4 w-4 text-brand-500 rounded border-stone-300"
+              className="h-4 w-4 text-forest-500 rounded border-stone-300"
               aria-label="Enabled"
             />
             <NumberBox

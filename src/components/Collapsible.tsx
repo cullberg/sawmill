@@ -13,8 +13,19 @@ interface Props {
   defaultOpen?: boolean;
   /** Right-aligned controls rendered inside the header (won't toggle). */
   headerExtras?: ReactNode;
-  /** Accent colour on the left edge — helps visual grouping. */
-  accent?: 'steel' | 'brand' | 'forest' | 'motor' | 'wood';
+  /**
+   * Accent colour on the left edge — helps visual grouping. Semantics:
+   *   - `steel`  : neutral, secondary or settings panels.
+   *   - `forest` : primary / positive — the content you act on.
+   *   - `brand`  : signal red. Reserve for content that itself draws
+   *                the physical saw in red (e.g. EndView-adjacent).
+   *   - `warn`   : amber. Reserve for warning content (cone banner
+   *                style). Not currently used by App.tsx but kept
+   *                available for future callers.
+   *   - `motor`  : blue, reserved for "mechanical" / reference content.
+   *   - `wood`   : timber-brown, reserved for log-measurement content.
+   */
+  accent?: 'steel' | 'brand' | 'forest' | 'warn' | 'motor' | 'wood';
   children: ReactNode;
 }
 
@@ -22,6 +33,7 @@ const ACCENT: Record<NonNullable<Props['accent']>, string> = {
   steel: 'border-l-steel-400',
   brand: 'border-l-brand-500',
   forest: 'border-l-forest-500',
+  warn: 'border-l-amber-500',
   motor: 'border-l-motor-500',
   wood: 'border-l-wood-500'
 };

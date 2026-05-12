@@ -159,7 +159,7 @@ export function EdgingGuide({ plan, remainingPlanks }: Props) {
 
       {clean.length > 0 && (
         <details className="text-xs">
-          <summary className="text-stone-500 cursor-pointer hover:text-brand-600 select-none">
+          <summary className="text-stone-500 cursor-pointer hover:text-forest-700 select-none">
             {clean.length} plank{clean.length === 1 ? '' : 's'} need{clean.length === 1 ? 's' : ''}{' '}
             no edging
           </summary>

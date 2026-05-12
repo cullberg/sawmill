@@ -162,7 +162,7 @@ export function Controls({
             <div
               className={`flex-1 rounded-lg px-3 py-2 ${
                 bladeValid
-                  ? 'bg-brand-50 border border-brand-200'
+                  ? 'bg-forest-50 border border-forest-200'
                   : 'bg-stone-100 border border-stone-200'
               }`}
             >
@@ -171,7 +171,7 @@ export function Controls({
               </div>
               <div
                 className={`tabular-nums font-bold leading-none ${
-                  bladeValid ? 'text-brand-700 text-2xl' : 'text-stone-400 text-2xl'
+                  bladeValid ? 'text-forest-700 text-2xl' : 'text-stone-400 text-2xl'
                 }`}
               >
                 {bladeValid ? `${bladeAboveBed.toFixed(0)} mm` : '—'}
@@ -207,8 +207,10 @@ export function Controls({
           </div>
 
           {/* Row 2: PRIMARY CUT / LIFT BUTTON — full width, always visible.
+              Forest green for the "go / proceed" semantic so red stays
+              reserved for warnings (cone banner, over-range hints).
               Inline style acts as a belt-and-braces fallback in case a
-              future Tailwind purge ever drops the brand/forest background
+              future Tailwind purge ever drops the forest background
               utility — the button must never render invisibly. */}
           {isDone ? (
             <button
@@ -226,12 +228,12 @@ export function Controls({
               disabled={!bladeValid}
               className={`w-full rounded-lg py-4 font-bold text-lg transition flex items-center justify-center gap-2 shadow-sm ${
                 bladeValid
-                  ? 'bg-brand-500 text-white hover:bg-brand-600'
+                  ? 'bg-forest-500 text-white hover:bg-forest-600'
                   : 'bg-stone-200 text-stone-500 cursor-not-allowed'
               }`}
               style={
                 bladeValid
-                  ? { backgroundColor: '#e42313', color: '#ffffff' }
+                  ? { backgroundColor: '#35671e', color: '#ffffff' }
                   : { backgroundColor: '#e7e5e4', color: '#78716c' }
               }
               title="Make the next cut"
@@ -266,7 +268,7 @@ export function Controls({
                 onReset();
               }
             }}
-            className="text-xs text-stone-500 hover:text-brand-600 underline"
+            className="text-xs text-stone-500 hover:text-forest-600 underline"
             title="Clear all cuts and start over"
           >
             ↺ Start over

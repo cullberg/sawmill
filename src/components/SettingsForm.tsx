@@ -79,7 +79,7 @@ export function SettingsForm({ settings, onChange }: Props) {
           type="checkbox"
           checked={settings.autoRotateForSquaring}
           onChange={(e) => update('autoRotateForSquaring', e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-stone-400 text-brand-600 focus:ring-brand-500"
+          className="mt-0.5 h-4 w-4 rounded border-stone-400 text-forest-600 focus:ring-forest-500"
         />
         <span className="flex-1">
           <span className="text-stone-700 font-medium">Auto-rotate during squaring</span>
