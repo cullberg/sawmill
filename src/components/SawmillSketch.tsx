@@ -27,7 +27,7 @@ export function SawmillSketch({ className = 'w-full h-auto' }: Props) {
       viewBox="0 0 900 300"
       className={className}
       role="img"
-      aria-label="Sketched illustration of a Nordic chainsaw sawmill"
+      aria-label="Sketched illustration of a Nordic chainsaw sawmill — the physical tool this planner is built for"
       xmlns="http://www.w3.org/2000/svg"
     >
       {/* Subtle ground line so the mill has somewhere to stand */}
@@ -167,7 +167,7 @@ export function SawmillSketch({ className = 'w-full h-auto' }: Props) {
       {/* Tiny manufacturer-style label on the beam, for flavour */}
       <g transform="translate(120 123)" fill={INK} fontFamily="ui-sans-serif, system-ui, sans-serif">
         <text fontSize={9} fontWeight={700} letterSpacing="1">
-          SAWMILL
+          NORTHERN LIGHTS
         </text>
       </g>
     </svg>

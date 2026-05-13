@@ -107,6 +107,25 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-steel-50 text-steel-900">
+      {/* Floating app icon — mirrors the help button in the opposite
+          corner. Kept as a pure brand mark (no text label) so it takes
+          minimal space on mobile while still anchoring the identity of
+          the planner. Using BASE_URL so the src resolves both in dev
+          ("/favicon.svg") and under the GitHub Pages subpath
+          ("/sawmill/favicon.svg"). */}
+      <div
+        className="fixed top-3 left-3 z-40 w-10 h-10 rounded-xl overflow-hidden shadow-md bg-[#0b1026]"
+        title="Northern Lights Sawmill Planner"
+        aria-hidden
+      >
+        <img
+          src={`${import.meta.env.BASE_URL}favicon.svg`}
+          alt=""
+          className="w-full h-full"
+          draggable={false}
+        />
+      </div>
+
       {/* Floating help button — always reachable without eating precious
           vertical space in the main layout. `fixed` so it stays visible
           when the user scrolls the long sidebar on small screens.

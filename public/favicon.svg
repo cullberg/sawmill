@@ -1,12 +1,58 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="10" fill="#3a444f"/>
-  <!-- galvanised steel top + bottom rails -->
-  <rect x="4" y="14" width="56" height="4" fill="#c8d0d8" stroke="#141920" stroke-width="0.5"/>
-  <rect x="4" y="46" width="56" height="4" fill="#c8d0d8" stroke="#141920" stroke-width="0.5"/>
-  <!-- wood log end -->
-  <circle cx="32" cy="32" r="14" fill="#fdf8f3" stroke="#23170b" stroke-width="1.5"/>
-  <circle cx="32" cy="32" r="10" fill="none" stroke="#81532b" stroke-width="0.8"/>
-  <circle cx="32" cy="32" r="5" fill="none" stroke="#81532b" stroke-width="0.8"/>
-  <!-- red blade cut -->
-  <rect x="4" y="25" width="56" height="2" fill="#e42313"/>
+  <defs>
+    <!-- Midnight sky: darker at the bottom, slightly lifted at the top -->
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a2145"/>
+      <stop offset="1" stop-color="#06081a"/>
+    </linearGradient>
+    <!-- Aurora ribbon gradient: classic green → teal → violet sweep -->
+    <linearGradient id="aurora" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4ade80" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#4ade80" stop-opacity="0.95"/>
+      <stop offset="0.55" stop-color="#22d3ee" stop-opacity="0.95"/>
+      <stop offset="0.85" stop-color="#a78bfa" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#a78bfa" stop-opacity="0"/>
+    </linearGradient>
+    <!-- Radial halo around the log: aurora green glow fading outward -->
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.55" stop-color="#4ade80" stop-opacity="0"/>
+      <stop offset="0.75" stop-color="#22d3ee" stop-opacity="0.55"/>
+      <stop offset="0.95" stop-color="#4ade80" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Rounded-square midnight background -->
+  <rect width="64" height="64" rx="10" fill="url(#sky)"/>
+
+  <!-- Scattered stars -->
+  <g fill="#e7ecff">
+    <circle cx="8" cy="10" r="0.7"/>
+    <circle cx="14" cy="6" r="0.5"/>
+    <circle cx="22" cy="11" r="0.4"/>
+    <circle cx="42" cy="8" r="0.5"/>
+    <circle cx="52" cy="5" r="0.7"/>
+    <circle cx="58" cy="13" r="0.5"/>
+    <circle cx="6" cy="20" r="0.4"/>
+  </g>
+
+  <!-- Two aurora ribbons arcing across the sky, softly glowing -->
+  <g fill="none" stroke-linecap="round" opacity="0.95">
+    <path d="M 2 18 Q 18 6 32 14 T 62 12" stroke="url(#aurora)" stroke-width="3.2"/>
+    <path d="M 2 22 Q 18 11 32 19 T 62 17" stroke="url(#aurora)" stroke-width="1.6" opacity="0.65"/>
+  </g>
+
+  <!-- Aurora halo around the log: radial glow, drawn BEFORE the log so
+       the rings sit crisply on top of it. -->
+  <circle cx="32" cy="38" r="20" fill="url(#halo)"/>
+
+  <!-- Log end — cream wood face with concentric growth rings -->
+  <g>
+    <circle cx="32" cy="38" r="15" fill="#fdf8f3" stroke="#23170b" stroke-width="1.6"/>
+    <!-- Growth rings: three inner circles at decreasing radii -->
+    <circle cx="32" cy="38" r="11.5" fill="none" stroke="#81532b" stroke-width="0.9" opacity="0.9"/>
+    <circle cx="32" cy="38" r="8" fill="none" stroke="#81532b" stroke-width="0.9" opacity="0.85"/>
+    <circle cx="32" cy="38" r="4.5" fill="none" stroke="#81532b" stroke-width="0.9" opacity="0.8"/>
+    <!-- Pith mark at dead centre -->
+    <circle cx="32" cy="38" r="1.4" fill="#3f2815"/>
+  </g>
 </svg>

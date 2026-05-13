@@ -46,7 +46,7 @@ export function HelpModal({ onClose }: Props) {
             without hiding the dismiss affordance. */}
         <header className="flex items-center justify-between px-6 py-3 border-b border-steel-100 bg-white">
           <h2 id="help-title" className="text-lg font-bold text-steel-900">
-            How to use the planner
+            Northern Lights Sawmill Planner
           </h2>
           <button
             type="button"

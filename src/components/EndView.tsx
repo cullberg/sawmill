@@ -239,6 +239,10 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
           // `targetWidth` (= plank.width), already implied by the plank's
           // own dimensions, so we don't label it separately.
           const eplan = spec ? edgingPlanForPlank(trim, spec) : null;
+          // Cut-1 side: the deeper wane gets its wedge removed first, so
+          // we show the blade height there. Ties break left. Cut 2 is
+          // always `targetWidth` (= plank.width), already implied by the
+          // plank's own dimensions, so we don't label it.
           const leftIsCut1 = trim.left >= trim.right;
           const leftCutLabel =
             eplan && !eplan.clean && showLeft && leftIsCut1 && eplan.cut1 != null
@@ -248,6 +252,29 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
             eplan && !eplan.clean && showRight && !leftIsCut1 && eplan.cut1 != null
               ? eplan.cut1.toFixed(0)
               : null;
+          // Tooltip surfaces the full edging plan on hover without
+          // cluttering the illustration with extra numbers. Matches the
+          // existing `title=` pattern used elsewhere (ConeBanner,
+          // Controls, etc.) — trades off touch discoverability for zero
+          // layout cost and automatic native styling.
+          const tooltipLines: string[] = [];
+          if (spec && eplan) {
+            tooltipLines.push(`Plank ${pp.label} (#${pp.sequence})`);
+            if (eplan.clean) {
+              tooltipLines.push('Edging: already clean, no cuts needed');
+            } else {
+              tooltipLines.push(`Rough width: ${eplan.roughWidth.toFixed(0)} mm`);
+              tooltipLines.push(`Target width: ${eplan.targetWidth.toFixed(0)} mm`);
+              if (eplan.cut1 != null) tooltipLines.push(`Cut 1: blade at ${eplan.cut1.toFixed(0)} mm`);
+              if (eplan.cut2 != null) tooltipLines.push(`Cut 2: blade at ${eplan.cut2.toFixed(0)} mm`);
+              if (eplan.requiresFlip) tooltipLines.push('Flip plank 180° between cuts');
+              const sides: string[] = [];
+              if (trim.left >= 1) sides.push(`left +${trim.left.toFixed(0)}`);
+              if (trim.right >= 1) sides.push(`right +${trim.right.toFixed(0)}`);
+              if (sides.length) tooltipLines.push(`Wane: ${sides.join(', ')} mm`);
+            }
+          }
+          const tooltip = tooltipLines.join('\n');
           const leftStart = spec ? logToSvg({ x: spec.x - spec.width / 2, y: spec.y }) : null;
           const leftEnd = spec
             ? logToSvg({ x: spec.x - spec.width / 2 - trim.left, y: spec.y })
@@ -259,6 +286,7 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
 
           return (
             <g key={pp.id}>
+              {tooltip && <title>{tooltip}</title>}
               {/* Shape-at-cut outline: the log silhouette at the moment
                   this plank was sawn off. Drawn behind the plank fill so
                   only the portion outside the plank rectangle is visible
@@ -443,8 +471,9 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
           // scale together as the illustration grows.
           const fontPx = cutFontPx;
 
-          // Blade-height callout for cut 1 only — see produced-planks
-          // block above for rationale (cut 2 always = plank.width).
+          // Tooltip with the full edging plan — mirrors the produced-
+          // planks tooltip, keyed off the remaining plank's spec rather
+          // than a ProducedPlank record.
           const eplan = edgingPlanForPlank(trim, p);
           const leftIsCut1 = trim.left >= trim.right;
           const leftCutLabel =
@@ -455,6 +484,21 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
             !eplan.clean && showRight && !leftIsCut1 && eplan.cut1 != null
               ? eplan.cut1.toFixed(0)
               : null;
+          const tooltipLines: string[] = [`Plank ${p.label} (#${p.sequence})`];
+          if (eplan.clean) {
+            tooltipLines.push('Edging: already clean, no cuts needed');
+          } else {
+            tooltipLines.push(`Rough width: ${eplan.roughWidth.toFixed(0)} mm`);
+            tooltipLines.push(`Target width: ${eplan.targetWidth.toFixed(0)} mm`);
+            if (eplan.cut1 != null) tooltipLines.push(`Cut 1: blade at ${eplan.cut1.toFixed(0)} mm`);
+            if (eplan.cut2 != null) tooltipLines.push(`Cut 2: blade at ${eplan.cut2.toFixed(0)} mm`);
+            if (eplan.requiresFlip) tooltipLines.push('Flip plank 180° between cuts');
+            const sides: string[] = [];
+            if (trim.left >= 1) sides.push(`left +${trim.left.toFixed(0)}`);
+            if (trim.right >= 1) sides.push(`right +${trim.right.toFixed(0)}`);
+            if (sides.length) tooltipLines.push(`Wane: ${sides.join(', ')} mm`);
+          }
+          const tooltip = tooltipLines.join('\n');
 
           // Endpoints for trim indicators in LOG frame. We draw from the
           // plank's edge (at the plank's centreline y for readability)
@@ -466,6 +510,7 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
 
           return (
             <g key={`rem-${i}`}>
+              <title>{tooltip}</title>
               {/* Kerf halo */}
               <path
                 d={pathFromPoints(pts)}

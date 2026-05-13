@@ -1,10 +1,11 @@
-# Sawmill Planner
+# Northern Lights Sawmill Planner
 
 A mobile/tablet-friendly Progressive Web App that helps you plan and
 optimize how to saw a log (pine, spruce, birch) on a single-blade
 chainsaw or bandsaw sawmill. Styled after the look of a Nordic chainsaw
-mill — galvanised steel frame, signal-red accents, motor-blue details,
-and warm wood tones for the log illustration.
+mill under an aurora sky — deep midnight background, galvanised steel
+frame, signal-red accents, motor-blue details, and warm wood tones for
+the log illustration.
 
 ## Features
 

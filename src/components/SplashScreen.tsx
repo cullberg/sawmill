@@ -49,7 +49,7 @@ export function SplashScreen({ onDismiss, onShowHelp }: Props) {
               id="splash-title"
               className="text-2xl font-bold text-steel-900 tracking-tight"
             >
-              Sawmill Planner
+              Northern Lights Sawmill Planner
             </h1>
             <p className="text-sm text-steel-600 mt-1">
               Plan and optimise how to saw your log on a single-blade chainsaw or
