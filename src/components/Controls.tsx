@@ -1,3 +1,4 @@
+import type { ConeState } from '../state/usePlan';
 import { togglePanelAndScroll } from './panelScroll';
 
 interface Props {
@@ -12,6 +13,14 @@ interface Props {
   onNextLog: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  /**
+   * Current cone / taper-compensation state. Drives the middle pill
+   * in Row 1 so the drop number sits right next to the chain-height
+   * number the sawyer is about to crank — the two values they need
+   * together. The banner below the illustration still renders the
+   * tilted-log figure for spatial context.
+   */
+  cone: ConeState;
   bladeAboveBed: number;
   bladeValid: boolean;
   bladeKind: 'slab' | 'plank' | 'done' | 'none';
@@ -64,6 +73,7 @@ export function Controls({
   onNextLog,
   canUndo,
   canRedo,
+  cone,
   bladeAboveBed,
   bladeValid,
   bladeKind,
@@ -103,6 +113,43 @@ export function Controls({
     suggestRotationDeg !== undefined && !autoRotateForSquaring
       ? `Rotate to ${suggestRotationDeg}° first`
       : undefined;
+
+  /**
+   * Cone-compensation pill copy + colour. Always visible so the
+   * Row-1 layout stays three-column and the sawyer always has a
+   * definitive cone read-out next to the chain-height number.
+   *
+   * Two user-visible states driven by four internal signals:
+   *   - active (round log, positive drop)  → amber "Lower root / N mm / support"
+   *   - everything else                    → forest green "Cone ✓ OK resolved"
+   *
+   * Collapsing `resolved`, `bedFlat`, and `noDrop` into one
+   * confirmation is a deliberate simplification — from the sawyer's
+   * perspective all three mean the same thing ("no drop needed right
+   * now"), so three separate visuals would just be three things to
+   * learn. The underlying state machine remains four-way (see
+   * usePlan's ConeState) and is still visible in the pill's tooltip
+   * for the curious user.
+   *
+   * Precedence (same as ConeBanner): resolved > bedFlat > active >
+   * noDrop. `bedFlat` trumping `active` is what prevents the UI
+   * saying "Lower root 10 mm" when the log already rests on a flat
+   * cut face and the taper is geometrically compensated.
+   */
+  const coneState: 'resolved' | 'bedFlat' | 'active' | 'noDrop' = cone.resolved
+    ? 'resolved'
+    : cone.bedFlat
+      ? 'bedFlat'
+      : cone.rootDropMm > 0
+        ? 'active'
+        : 'noDrop';
+  const coneCls =
+    coneState === 'active'
+      ? 'bg-amber-50 border-amber-200 text-amber-900'
+      : 'bg-forest-50 border-forest-200 text-forest-800';
+  const coneHeading = coneState === 'active' ? 'Lower root' : 'Cone';
+  const coneValue = coneState === 'active' ? `${cone.rootDropMm.toFixed(0)} mm` : '✓ OK';
+  const coneFoot = coneState === 'active' ? 'support' : 'resolved';
 
   /**
    * Completion flow: every planned plank is sawn. Swap the blade readout
@@ -159,10 +206,15 @@ export function Controls({
       ) : (
         /* === Active cutting state === */
         <>
-          {/* Row 1: blade readout (left) + next-cut pill (right) */}
+          {/* Row 1: three equal-width pills — blade height (left),
+              cone compensation (middle), next-cut description
+              (right). Cone is always-visible with state-dependent
+              colour + copy so the sawyer has both key numbers (drop
+              and blade height) side by side, matching the natural
+              "set the supports, then set the blade" order. */}
           <div className="flex items-stretch gap-3">
             <div
-              className={`flex-1 rounded-lg px-3 py-2 ${
+              className={`flex-1 min-w-0 rounded-lg px-3 py-2 ${
                 bladeValid
                   ? 'bg-forest-50 border border-forest-200'
                   : 'bg-stone-100 border border-stone-200'
@@ -181,7 +233,31 @@ export function Controls({
               <div className="text-[10px] text-stone-500">from bed to {toolLabel}</div>
             </div>
             <div
-              className={`flex-1 rounded-lg px-3 py-2 text-xs flex flex-col justify-center ${
+              className={`flex-1 min-w-0 rounded-lg px-3 py-2 border ${coneCls}`}
+              title={
+                coneState === 'active'
+                  ? `Lower the root-side support by ${cone.rootDropMm.toFixed(0)} mm before your first cut.`
+                  : coneState === 'resolved'
+                    ? 'Cone resolved — two cuts 180° apart, pith is horizontal between the supports.'
+                    : coneState === 'bedFlat'
+                      ? 'Log rests on a flat cut face — the taper is already compensated at this rotation, so no further drop is needed here.'
+                      : 'Measured diameters match (or root is smaller) — no support drop needed yet.'
+              }
+            >
+              <div className="text-[10px] uppercase tracking-wide opacity-70">
+                {coneHeading}
+              </div>
+              <div
+                className={`tabular-nums font-bold leading-none ${
+                  coneState === 'active' ? 'text-2xl' : 'text-lg'
+                }`}
+              >
+                {coneValue}
+              </div>
+              <div className="text-[10px] opacity-80">{coneFoot}</div>
+            </div>
+            <div
+              className={`flex-1 min-w-0 rounded-lg px-3 py-2 text-xs flex flex-col justify-center ${
                 bladeKind === 'plank'
                   ? 'bg-forest-50 text-forest-800 border border-forest-200'
                   : bladeKind === 'slab'
@@ -248,10 +324,21 @@ export function Controls({
       )}
 
       {/* Row 3: rotation + undo/redo, compact — always visible so the
-          operator can still undo their way back out of the completion state. */}
+          operator can still undo their way back out of the completion state.
+
+          Signs on the two rotate buttons are chosen so the icon matches
+          the on-screen spin direction:
+            - ⟲ (anticlockwise icon) calls onRotateBy(+90): rotationDeg
+              is "CCW positive" (see usePlan's `bedUpInLog` comment), so
+              a +90 delta rotates the log CCW on screen — matching the
+              ⟲ glyph and the amber RotationIndicator's CCW arrow.
+            - ⟳ (clockwise icon) calls onRotateBy(-90) for the mirror
+              reason. Flipping these signs was the long-standing bug the
+              rotation indicator surfaced: the icons and the log's spin
+              used to point opposite ways. */}
       <div className="grid grid-cols-4 gap-2">
-        <SecBtn onClick={() => onRotateBy(-90)} label="⟲ 90°" sub={`${rotation.toFixed(0)}°`} />
-        <SecBtn onClick={() => onRotateBy(90)} label="90° ⟳" sub="" />
+        <SecBtn onClick={() => onRotateBy(90)} label="⟲ 90°" sub={`${rotation.toFixed(0)}°`} />
+        <SecBtn onClick={() => onRotateBy(-90)} label="90° ⟳" sub="" />
         <SecBtn onClick={onUndo} disabled={!canUndo} label="↑" sub="Undo" />
         <SecBtn onClick={onRedo} disabled={!canRedo} label="↷" sub="Redo" />
       </div>

@@ -3,6 +3,7 @@ import { toolName } from '../core/tool';
 import { computePlankTrim } from '../core/trim';
 import type { PlacedPlank, PlanState, ProducedPlank, Vec2 } from '../core/types';
 import { initialShape, type BladeReadout } from '../state/usePlan';
+import { RotationIndicator } from './RotationIndicator';
 
 interface Props {
   plan: PlanState;
@@ -82,12 +83,17 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
 
   return (
     <div className="w-full flex flex-col items-center">
-      <svg
-        viewBox={`0 0 ${size} ${size}`}
-        className="w-full max-w-[600px] aspect-square bg-steel-50 rounded-2xl shadow-inner"
-        role="img"
-        aria-label="End view of the log with planned planks"
-      >
+      {/* Wrapping the SVG in a relative container so RotationIndicator
+          can absolute-overlay it. The indicator sits on top of the
+          log drawing only — not the legend below — so the legend
+          stays readable while a rotation arrow animates. */}
+      <div className="relative w-full max-w-[600px]">
+        <svg
+          viewBox={`0 0 ${size} ${size}`}
+          className="w-full aspect-square bg-steel-50 rounded-2xl shadow-inner"
+          role="img"
+          aria-label="End view of the log with planned planks"
+        >
         <defs>
           {/* Clip everything drawn inside the log to the current cross-section shape. */}
           {shapePath && (
@@ -580,6 +586,8 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
           </text>
         </g>
       </svg>
+        <RotationIndicator rotationDeg={plan.rotationDeg} />
+      </div>
 
       {/* Legend lives outside the SVG so its brown swatch can't be mistaken
           for a piece of bark hanging off the log illustration, and so it

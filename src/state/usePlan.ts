@@ -85,11 +85,15 @@ export interface ConeState {
   resolved: boolean;
   /**
    * True when the shape currently has a flat face resting on the mill
-   * bed (i.e. the bed-side of `plan.shape` is a straight edge). The log
-   * can't roll in that case, so any cone-compensation advice is moot —
-   * the UI hides the banner entirely. This is a function of `plan.shape`
-   * and `plan.rotationDeg`, so it flips back to `false` if the sawyer
-   * rotates the curved side of the log back down.
+   * bed (i.e. the bed-side of `plan.shape` is a straight edge at the
+   * current rotation). The log can't roll in that position, and the
+   * flat face has ALREADY compensated for the taper for this
+   * orientation — the sawyer should NOT drop the support any further.
+   *
+   * This flag is a function of `plan.shape` and `plan.rotationDeg`,
+   * so it flips back to `false` if the sawyer rotates the curved
+   * side of the log back down. The UI uses it to suppress drop
+   * advice whenever it's true, even when `resolved` is still false.
    */
   bedFlat: boolean;
 }
@@ -810,14 +814,28 @@ export function usePlan(options: UsePlanOptions = {}): UsePlan {
   };
 
   /**
-   * Cone detection: resolved once two committed cuts differ in rotation by
-   * 180° (±1°). Until then, the sawyer should compensate by lowering the
-   * root-side support.
+   * Cone detection. The sawyer needs to know whether the taper
+   * problem is currently handled — either physically (the log rests
+   * on a flat cut face and can't roll) or procedurally (two cuts
+   * 180° apart have been made, so the pith is level between
+   * supports). Three signals captured:
    *
-   * `bedFlat` is a separate, stronger signal: if the log is currently
-   * resting on a flat cut face it can't roll, so cone compensation is
-   * irrelevant regardless of which rotations we've cut at. The banner
-   * hides entirely in that case.
+   *   - `rootDropMm` : the theoretical drop needed for the root-side
+   *     support given the measured taper, 0 when resolved. Always
+   *     what the sawyer would need IF the log were still round at
+   *     the current rotation.
+   *   - `resolved`   : two cuts 180° apart have been committed.
+   *     Permanent for the rest of the log.
+   *   - `bedFlat`    : the log currently rests on a flat cut face,
+   *     so the drop is already compensated by the geometry and
+   *     MUST NOT be re-applied. Rotation-dependent — flips back
+   *     false if the sawyer spins onto a round face before
+   *     resolution.
+   *
+   * The UI suppresses drop advice whenever `resolved || bedFlat`,
+   * showing a confirmation badge instead. This fixes the "claims
+   * 10 mm compensation when the log is already flat on the bed"
+   * bug that came from trusting resolved alone.
    */
   const cone = useMemo<ConeState>(() => {
     const angles = plan.cuts.map((c) => ((c.rotationDeg % 360) + 360) % 360);

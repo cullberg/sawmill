@@ -8,43 +8,32 @@ interface Props {
 }
 
 /**
- * Compact taper-compensation notice. Renders in one of four states,
- * but ALWAYS occupies the same vertical footprint so the EndView below
- * never jumps up or down when the cone state changes (e.g. the sawyer
- * rotates the log onto a flat face and `bedFlat` flips). Jumping
- * content is actively irritating on a workshop tablet where the
- * sawyer's eye is locked on the EndView between cuts.
+ * Compact taper-compensation notice. Two user-visible states —
+ * "compensation needed" (amber) and "cone OK" (forest green) —
+ * driven by four internal cone-state signals. Three of those four
+ * signals (`resolved`, `bedFlat`, `noDrop`) all mean the same thing
+ * from the sawyer's perspective — "no drop needed right now" — and
+ * collapse into the same green confirmation badge. Only `active`
+ * (round log, positive drop) stands apart, because it's the only
+ * one with an action attached.
  *
- * States:
- *   - active   : a positive root-side lowering is required (log still
- *                rolls freely on round wood). Amber accent + side-view
- *                figure of the log tilted on level supports, amber
- *                arrow under the root support showing the drop.
- *                Amber is distinct from forest (primaries) and signal-
- *                red (physical-saw drawings).
- *   - noDrop   : measurements match or root is smaller — no drop
- *                needed, but the sawyer still hasn't cut a reference
- *                face to close the matter. Neutral stone-grey.
- *   - bedFlat  : log currently rests on a flat cut face and can't
- *                roll. Cone question suspended. Neutral stone-grey.
- *   - resolved : two cuts 180° apart have been made — the pith is
- *                formally horizontal. Forest-green confirmation so the
- *                sawyer gets positive feedback that the cone work is
- *                done and can stop worrying about it.
+ * The four-signal state machine is still visible to anyone hovering
+ * the card via the `title` tooltip, so the distinction is not lost
+ * for debugging; it's just hidden from the primary read.
  *
- * The taper of the drawn log (active / noDrop variants) is
- * proportional to the actual `rootSideDiameter` / `topSideDiameter`
- * so the illustration reads consistently with what the sawyer
- * measured.
+ * ALWAYS occupies the same vertical footprint so the layout around
+ * it never jumps when the state changes. Jumping content is
+ * actively irritating on a workshop tablet where the sawyer's eye
+ * is locked on the EndView above between cuts.
+ *
+ * Precedence when multiple conditions are true: resolved > bedFlat
+ * > active > noDrop. `bedFlat` trumping `active` is what fixes the
+ * "claims 10 mm compensation when the log is already flat on the
+ * bed" bug — a flat cut face already compensates for the taper, so
+ * telling the sawyer to ALSO lower the support would
+ * over-compensate.
  */
 export function ConeBanner({ cone, log }: Props) {
-  // Decide which state we're in. Order matters when more than one
-  // condition is true simultaneously:
-  //   - `resolved` trumps `bedFlat` because "you finished the cone
-  //     work" is strictly more informative than "the log happens to
-  //     rest flat right now".
-  //   - Between the two unresolved states (active / noDrop), a
-  //     positive drop requirement is the only actionable one.
   const state: 'active' | 'noDrop' | 'bedFlat' | 'resolved' = cone.resolved
     ? 'resolved'
     : cone.bedFlat
@@ -65,52 +54,36 @@ export function ConeBanner({ cone, log }: Props) {
       <div className={`${shell} border-amber-400 bg-amber-50`}>
         <div className={body}>
           <ConeFigure variant="active" log={log} rootDropMm={cone.rootDropMm} />
-          <span className="font-medium text-amber-900">Cone compensation:</span>
           <span className="text-amber-800">
-            lower root-side support by{' '}
-            <span className="font-bold tabular-nums">{cone.rootDropMm.toFixed(0)} mm</span>
+            Lower root-side support by{' '}
+            <span className="font-bold tabular-nums text-amber-900">
+              {cone.rootDropMm.toFixed(0)} mm
+            </span>
           </span>
         </div>
       </div>
     );
   }
 
-  if (state === 'noDrop') {
-    return (
-      <div className={`${shell} border-stone-300 bg-stone-50`}>
-        <div className={body}>
-          <ConeFigure variant="noDrop" log={log} rootDropMm={0} />
-          <span className="font-medium text-stone-700">No support drop needed</span>
-          <span className="text-stone-600 hidden sm:inline text-xs">
-            — measurements match or root is smaller. Cut a reference face on each side to resolve the cone.
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  if (state === 'bedFlat') {
-    return (
-      <div className={`${shell} border-stone-300 bg-stone-50`}>
-        <div className={body}>
-          <span aria-hidden className="text-stone-500 text-lg leading-none">⚖</span>
-          <span className="font-medium text-stone-700">Log resting flat</span>
-          <span className="text-stone-600 hidden sm:inline text-xs">
-            — it can't roll, so cone compensation is paused at this rotation.
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  // state === 'resolved'
+  // resolved / bedFlat / noDrop — all read as "cone OK" to the sawyer.
+  // The tooltip preserves the underlying distinction for anyone who
+  // wants to know exactly why.
+  const tooltip =
+    state === 'resolved'
+      ? 'Cone resolved — two cuts 180° apart, the pith is horizontal between the supports.'
+      : state === 'bedFlat'
+        ? 'Log rests on a flat cut face — the taper is already compensated at this rotation, so no further drop is needed here.'
+        : 'Measured diameters match (or root is smaller) — no support drop needed yet.';
   return (
-    <div className={`${shell} border-forest-300 bg-forest-50`}>
+    <div
+      className={`${shell} border-forest-300 bg-forest-50`}
+      title={tooltip}
+    >
       <div className={body}>
         <span aria-hidden className="text-forest-600 text-lg leading-none">✓</span>
         <span className="font-medium text-forest-800">Cone resolved</span>
         <span className="text-forest-700 hidden sm:inline text-xs">
-          — two cuts 180° apart, the pith is now horizontal between the supports.
+          — no support drop needed at this rotation.
         </span>
       </div>
     </div>
@@ -121,6 +94,16 @@ export function ConeBanner({ cone, log }: Props) {
 /*  Side-view log illustration                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * `active` = amber accent + drop arrow under the root support.
+ * `noDrop` = grey accent, no arrow, log drawn near-horizontal.
+ *
+ * Only the `active` variant is used by the current banner — the
+ * no-drop / bed-flat states collapsed into a single compact card
+ * without the figure. The `'noDrop'` case is kept in the union so
+ * the figure is still available if a future redesign wants to
+ * re-introduce it inside the neutral banner.
+ */
 type Variant = 'active' | 'noDrop';
 
 interface FigureProps {
@@ -150,16 +133,22 @@ interface FigureProps {
  *     log is near-cylindrical so the pith is near-horizontal.
  *
  * The resolved / bed-flat states don't use this figure at all — the
- * parent component renders a smaller confirmation banner for those
- * states (same footprint so layout doesn't shift, but no need for a
- * proportional log drawing when the question is settled or paused).
+ * parent component renders a smaller confirmation banner for each
+ * (same footprint so layout doesn't shift, but no need for a
+ * proportional log drawing once the cone is either resolved or
+ * physically neutralised by the flat face on the bed).
  *
  * Nothing in this figure is meant to be measurable — it's a
  * proportional schematic so the banner state reads at a glance.
  */
 function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
-  const W = 96;
-  const H = 36;
+  // Grown from the earlier 96×36 since the banner no longer carries
+  // a "Cone compensation:" label — the figure now claims that space.
+  // All downstream sizes (logPath, support blocks, drop arrow, pith
+  // stroke) derive from W / H / mmPerPx / rMax so tuning those four
+  // numbers alone scales the whole schematic uniformly.
+  const W = 160;
+  const H = 40;
 
   // Log axis runs across the figure with a small margin on each side.
   const xMargin = 4;
@@ -176,16 +165,16 @@ function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
 
   // Four half-diameters in figure space, all scaled together so the
   // taper proportions are preserved. mmPerPx chosen so a typical
-  // 300–400 mm log maps to a comfortable 8–11 px radius; scale down
+  // 300–400 mm log maps to a comfortable 13–17 px radius; scale down
   // further if a measurement would push past `rMax`.
   const dRootEnd = Math.max(1, rootEndDiameter(log));
   const dTopEnd = Math.max(1, topEndDiameter(log));
   const dRootSup = Math.max(1, log.rootSideDiameter);
   const dTopSup = Math.max(1, log.topSideDiameter);
-  const mmPerPx = 0.055;
+  const mmPerPx = 0.085;
   const raw = [dRootEnd, dTopEnd, dRootSup, dTopSup].map((d) => (d / 2) * mmPerPx);
-  const rMax = 9;
-  const rMin = 2.5;
+  const rMax = 13;
+  const rMin = 3;
   const scale = Math.min(1, rMax / Math.max(...raw));
   const [rRootEnd, rTopEnd, rRootSup, rTopSup] = raw.map((r) => Math.max(rMin, r * scale));
 
@@ -194,8 +183,8 @@ function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
   // are level. The pith is then forced to slope down-to-the-right
   // when the root is thicker than the top (`active`), or stays
   // (nearly) horizontal when the diameters are equal (`noDrop`).
-  const supportHeight = 5;
-  const ySupportTip = H - supportHeight - 7; // 7 px under the support base for the arrow
+  const supportHeight = 6;
+  const ySupportTip = H - supportHeight - 8; // leaves room for the drop arrow
 
   // Supports are under the log, tips pointing up; the log's bottom
   // profile rests on the support tip. So pith_y = support tip y − r
@@ -222,7 +211,7 @@ function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
     ` L ${xLogRoot} ${yPithLogRoot + rRootEnd}` +
     ' Z';
 
-  const supportHalf = 4;
+  const supportHalf = 5;
   const supportPath = (x: number, yTip: number): string =>
     `M ${x} ${yTip}` +
     ` L ${x - supportHalf} ${yTip + supportHeight}` +
@@ -251,7 +240,7 @@ function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
         d={logPath}
         fill="#efe1cf"
         stroke="#8b5e34"
-        strokeWidth={0.9}
+        strokeWidth={1.1}
         strokeLinejoin="round"
       />
       {/* Pith axis — spans the full log length, dashed; slope encodes
@@ -262,8 +251,8 @@ function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
         x2={xLogTop}
         y2={yPithLogTop}
         stroke={axisColor}
-        strokeWidth={0.9}
-        strokeDasharray="2 2"
+        strokeWidth={1.1}
+        strokeDasharray="3 2"
         opacity={0.85}
       />
 
@@ -273,10 +262,10 @@ function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
 
       {/* Active-variant drop arrow. */}
       {variant === 'active' && (
-        <g stroke={accent} fill={accent} strokeWidth={1}>
+        <g stroke={accent} fill={accent} strokeWidth={1.2}>
           <line x1={xRootSup} y1={arrowY1} x2={xRootSup} y2={arrowY2} />
           <polygon
-            points={`${xRootSup - 2.5},${arrowY2 - 2.5} ${xRootSup + 2.5},${arrowY2 - 2.5} ${xRootSup},${arrowY2 + 0.5}`}
+            points={`${xRootSup - 3.2},${arrowY2 - 3.2} ${xRootSup + 3.2},${arrowY2 - 3.2} ${xRootSup},${arrowY2 + 0.8}`}
             stroke="none"
           />
         </g>

@@ -132,8 +132,15 @@ export default function App() {
             viewport so the operator's main working surface is never pushed
             below the fold. */}
         <div className="space-y-3 order-1">
-          <ConeBanner cone={cone} log={plan.log} />
           <EndView plan={plan} blade={blade} remainingPlanks={remainingPlanks} />
+          {/* Cone-compensation banner sits UNDER the illustration so it
+              mirrors the physical workshop layout — the support blocks
+              are beneath the log, and "lower the root support" advice
+              naturally belongs there. The Row-1 cone pill inside
+              Controls (below) shows the drop number so the sawyer sees
+              it right next to the blade height; this banner keeps the
+              tilted-log figure for spatial context. */}
+          <ConeBanner cone={cone} log={plan.log} />
           <Controls
             rotation={plan.rotationDeg}
             onRotateBy={rotateBy}
@@ -145,6 +152,7 @@ export default function App() {
             onNextLog={startNextLog}
             canUndo={canUndo}
             canRedo={canRedo}
+            cone={cone}
             bladeAboveBed={blade.bladeAboveBed}
             bladeValid={blade.valid}
             bladeKind={blade.kind}
