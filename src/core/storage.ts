@@ -21,83 +21,98 @@ export const defaultSettings: MillSettings = {
 };
 
 /**
- * Default priority list of preferred plank dimensions, in decreasing priority.
- * Each entry is `thickness × width` (mm). Grouped by thickness, thickest first
- * within each "visual family". The user can reorder, toggle, or remove entries
- * in the UI.
+ * Each entry is `{ thickness, width, enabled }` (mm). The list opens with
+ * the squared sizes (thickness == width) disabled — they're specialty
+ * posts/beams, useful to reach for occasionally but not typical output —
+ * and then runs through each thickness family widest-first, with the
+ * 50-mm family enabled by default so a fresh install produces a
+ * recognisable 50-mm plank layout straight away.
+ *
+ * The user can reorder, toggle, or remove entries in the UI; everything
+ * below is just the starting point shown on first run and on "Restore
+ * defaults".
  */
-const DEFAULT_PRIORITY: Array<[thickness: number, width: number]> = [
-  // 50-mm thickness family
-  [50, 100],
-  [50, 125],
-  [50, 150],
-  [50, 175],
-  [50, 200],
-  [50, 225],
-  [50, 250],
-  [50, 75],
+interface DefaultEntry {
+  t: number;
+  w: number;
+  enabled: boolean;
+}
+const DEFAULT_PRIORITY: DefaultEntry[] = [
+  // ─── Squared sizes (thickness == width), largest first, all disabled ───
+  // Parked at the top so they're easy to find when a plan calls for a
+  // post or a beam, but off by default so they don't crowd the 50-mm
+  // plank layout that most sessions start from.
+  { t: 300, w: 300, enabled: false },
+  { t: 250, w: 250, enabled: false },
+  { t: 225, w: 225, enabled: false },
+  { t: 200, w: 200, enabled: false },
+  { t: 175, w: 175, enabled: false },
+  { t: 150, w: 150, enabled: false },
+  { t: 125, w: 125, enabled: false },
+  { t: 100, w: 100, enabled: false },
+
+  // ─── 50-mm family — enabled by default, widest-first ───
+  { t: 50, w: 250, enabled: true },
+  { t: 50, w: 225, enabled: true },
+  { t: 50, w: 200, enabled: true },
+  { t: 50, w: 175, enabled: true },
+  { t: 50, w: 150, enabled: true },
+  { t: 50, w: 125, enabled: true },
+  { t: 50, w: 100, enabled: true },
+  { t: 50, w: 75, enabled: true },
+
+  // ─── Other thickness families — disabled by default ───
   // 38-mm
-  [38, 100],
-  [38, 125],
-  [38, 150],
-  [38, 175],
-  [38, 200],
+  { t: 38, w: 200, enabled: false },
+  { t: 38, w: 175, enabled: false },
+  { t: 38, w: 150, enabled: false },
+  { t: 38, w: 125, enabled: false },
+  { t: 38, w: 100, enabled: false },
   // 25-mm
-  [25, 100],
-  [25, 125],
-  [25, 150],
-  [25, 175],
-  [25, 200],
-  [25, 225],
-  [25, 250],
+  { t: 25, w: 250, enabled: false },
+  { t: 25, w: 225, enabled: false },
+  { t: 25, w: 200, enabled: false },
+  { t: 25, w: 175, enabled: false },
+  { t: 25, w: 150, enabled: false },
+  { t: 25, w: 125, enabled: false },
+  { t: 25, w: 100, enabled: false },
   // 63-mm
-  [63, 100],
-  [63, 125],
-  [63, 150],
-  [63, 175],
-  [63, 200],
+  { t: 63, w: 200, enabled: false },
+  { t: 63, w: 175, enabled: false },
+  { t: 63, w: 150, enabled: false },
+  { t: 63, w: 125, enabled: false },
+  { t: 63, w: 100, enabled: false },
   // 75-mm
-  [75, 125],
-  [75, 150],
-  [75, 175],
-  [75, 200],
-  // 100-mm squares-ish
-  [100, 100],
-  [100, 150],
-  [100, 200],
-  // 125-mm
-  [125, 125],
-  [125, 150],
-  [125, 175],
-  // 150-mm
-  [150, 150],
-  [150, 200],
-  [150, 225],
-  // 175-mm
-  [175, 175],
-  [175, 200],
-  // 200-mm
-  [200, 200],
-  [200, 225],
-  [200, 250],
-  // 225-mm
-  [225, 225],
-  [225, 250],
-  // 250-mm
-  [250, 250],
-  // big beams
-  [200, 300],
-  [250, 300],
-  [300, 300]
+  { t: 75, w: 200, enabled: false },
+  { t: 75, w: 175, enabled: false },
+  { t: 75, w: 150, enabled: false },
+  { t: 75, w: 125, enabled: false },
+  // 100-mm non-square
+  { t: 100, w: 200, enabled: false },
+  { t: 100, w: 150, enabled: false },
+  // 125-mm non-square
+  { t: 125, w: 175, enabled: false },
+  { t: 125, w: 150, enabled: false },
+  // 150-mm non-square
+  { t: 150, w: 225, enabled: false },
+  { t: 150, w: 200, enabled: false },
+  // 175-mm non-square
+  { t: 175, w: 200, enabled: false },
+  // 200-mm non-square
+  { t: 200, w: 250, enabled: false },
+  { t: 200, w: 225, enabled: false },
+  // 225-mm non-square
+  { t: 225, w: 250, enabled: false },
+  // Big beams (300-wide)
+  { t: 250, w: 300, enabled: false },
+  { t: 200, w: 300, enabled: false }
 ];
 
-export const defaultPriority: PlankSpec[] = DEFAULT_PRIORITY.map(([t, w], i) => ({
+export const defaultPriority: PlankSpec[] = DEFAULT_PRIORITY.map(({ t, w, enabled }) => ({
   id: `p-${t}x${w}`,
   width: w,
   thickness: t,
-  // Enable only the first few by default so the layout is manageable; the
-  // user can toggle the rest on as needed.
-  enabled: i < 8,
+  enabled,
   label: `${t}×${w}`
 }));
 
@@ -107,11 +122,11 @@ export const defaultPriority: PlankSpec[] = DEFAULT_PRIORITY.map(([t, w], i) => 
  * (React state updates cleanly) without mutating the exported constant.
  */
 export function makeDefaultPriority(): PlankSpec[] {
-  return DEFAULT_PRIORITY.map(([t, w], i) => ({
+  return DEFAULT_PRIORITY.map(({ t, w, enabled }) => ({
     id: `p-${t}x${w}`,
     width: w,
     thickness: t,
-    enabled: i < 8,
+    enabled,
     label: `${t}×${w}`
   }));
 }
