@@ -1,6 +1,6 @@
 import { rootEndDiameter, designDiameter } from '../core/taper';
 import { toolName } from '../core/tool';
-import { computePlankTrim } from '../core/trim';
+import { computePlankTrim, edgingPlanForPlank } from '../core/trim';
 import type { PlacedPlank, PlanState, ProducedPlank, Vec2 } from '../core/types';
 import { initialShape, type BladeReadout } from '../state/usePlan';
 import { RotationIndicator } from './RotationIndicator';
@@ -48,6 +48,16 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
   });
   const bedToSvg = (p: Vec2): Vec2 => ({ x: cx + p.x * scale, y: cy - p.y * scale });
   const logToSvg = (p: Vec2): Vec2 => bedToSvg(logToBed(p));
+
+  // Orientation of the plank's long axis (= log-frame +x) in SVG degrees.
+  // The log-frame unit vector (1,0) lands at (cosR, -sinR) in SVG (Y flips
+  // between bed and SVG), whose SVG-CW angle is `-rotationDeg`. We then
+  // normalise into the readable half-circle [-90°, 90°] by flipping 180°
+  // when the text would otherwise run upside-down, so plank labels are
+  // always left-to-right regardless of how much the log has been rotated.
+  const rawTextAngle = -rotation;
+  const normAngle = ((rawTextAngle % 360) + 540) % 360 - 180; // (-180, 180]
+  const plankTextAngle = normAngle > 90 ? normAngle - 180 : normAngle < -90 ? normAngle + 180 : normAngle;
 
   const bedSvgY = cy - blade.bedY * scale;
   const bladeSvgY = cy - blade.bladeBedY * scale;
@@ -214,6 +224,30 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
           const trimFontPx = spec
             ? Math.max(8, Math.min(11, spec.thickness * scale * 0.28))
             : 10;
+          // Cut-height numbers get their own, larger scale — with no
+          // "cut 1/2" prefix they're just 2-3 digits, so we can afford
+          // a bigger multiplier and a higher cap than the "+N" trim
+          // label (which sits above a short dashed arrow and must fit
+          // inside the wane wedge).
+          const cutFontPx = spec
+            ? Math.max(11, Math.min(18, spec.thickness * scale * 0.45))
+            : 14;
+          // Blade-height callout for cut 1 — the non-obvious height the
+          // sawyer needs to dial in before the first edging pass. Goes
+          // next to the deeper wane (the side whose wedge is being
+          // removed by cut 1); ties break left. Cut 2 is always
+          // `targetWidth` (= plank.width), already implied by the plank's
+          // own dimensions, so we don't label it separately.
+          const eplan = spec ? edgingPlanForPlank(trim, spec) : null;
+          const leftIsCut1 = trim.left >= trim.right;
+          const leftCutLabel =
+            eplan && !eplan.clean && showLeft && leftIsCut1 && eplan.cut1 != null
+              ? eplan.cut1.toFixed(0)
+              : null;
+          const rightCutLabel =
+            eplan && !eplan.clean && showRight && !leftIsCut1 && eplan.cut1 != null
+              ? eplan.cut1.toFixed(0)
+              : null;
           const leftStart = spec ? logToSvg({ x: spec.x - spec.width / 2, y: spec.y }) : null;
           const leftEnd = spec
             ? logToSvg({ x: spec.x - spec.width / 2 - trim.left, y: spec.y })
@@ -276,9 +310,11 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
               <text
                 x={centroid.x}
                 y={centroid.y}
+                transform={`rotate(${plankTextAngle.toFixed(2)} ${centroid.x} ${centroid.y})`}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize={11}
+                fontSize={cutFontPx}
+                fontWeight={500}
                 fill="#203d12"
                 className="select-none pointer-events-none"
               >
@@ -315,6 +351,22 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
                   >
                     +{trim.left.toFixed(0)}
                   </text>
+                  {leftCutLabel && (
+                    <text
+                      x={(leftStart.x + leftEnd.x) / 2}
+                      y={leftStart.y + cutFontPx + 2}
+                      textAnchor="middle"
+                      dominantBaseline="alphabetic"
+                      fontSize={cutFontPx}
+                      fill="#1f2937"
+                      fontWeight={600}
+                      stroke="#ffffff"
+                      strokeWidth={3}
+                      style={{ paintOrder: 'stroke' }}
+                    >
+                      {leftCutLabel}
+                    </text>
+                  )}
                 </g>
               )}
               {showRight && rightStart && rightEnd && (
@@ -343,6 +395,22 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
                   >
                     +{trim.right.toFixed(0)}
                   </text>
+                  {rightCutLabel && (
+                    <text
+                      x={(rightStart.x + rightEnd.x) / 2}
+                      y={rightStart.y + cutFontPx + 2}
+                      textAnchor="middle"
+                      dominantBaseline="alphabetic"
+                      fontSize={cutFontPx}
+                      fill="#1f2937"
+                      fontWeight={600}
+                      stroke="#ffffff"
+                      strokeWidth={3}
+                      style={{ paintOrder: 'stroke' }}
+                    >
+                      {rightCutLabel}
+                    </text>
+                  )}
                 </g>
               )}
             </g>
@@ -361,7 +429,6 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
           ];
           const pts = corners.map(logToSvg);
           const centre = logToSvg({ x: p.x, y: p.y });
-          const fontPx = Math.max(10, Math.min(14, Math.min(p.width, p.thickness) * scale * 0.35));
 
           // Wane trim indicators: show how far the current log shape
           // extends beyond the plank's target rectangle on each side. A
@@ -371,6 +438,23 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
           const showLeft = trim.left >= 5;
           const showRight = trim.right >= 5;
           const trimFontPx = Math.max(8, Math.min(11, p.thickness * scale * 0.28));
+          const cutFontPx = Math.max(11, Math.min(18, p.thickness * scale * 0.45));
+          // Plank centre label shares the cut-callout size so both labels
+          // scale together as the illustration grows.
+          const fontPx = cutFontPx;
+
+          // Blade-height callout for cut 1 only — see produced-planks
+          // block above for rationale (cut 2 always = plank.width).
+          const eplan = edgingPlanForPlank(trim, p);
+          const leftIsCut1 = trim.left >= trim.right;
+          const leftCutLabel =
+            !eplan.clean && showLeft && leftIsCut1 && eplan.cut1 != null
+              ? eplan.cut1.toFixed(0)
+              : null;
+          const rightCutLabel =
+            !eplan.clean && showRight && !leftIsCut1 && eplan.cut1 != null
+              ? eplan.cut1.toFixed(0)
+              : null;
 
           // Endpoints for trim indicators in LOG frame. We draw from the
           // plank's edge (at the plank's centreline y for readability)
@@ -396,9 +480,11 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
               <text
                 x={centre.x}
                 y={centre.y}
+                transform={`rotate(${plankTextAngle.toFixed(2)} ${centre.x} ${centre.y})`}
                 textAnchor="middle"
                 dominantBaseline="central"
                 fontSize={fontPx}
+                fontWeight={500}
                 fill="#23170b"
                 className="select-none pointer-events-none"
               >
@@ -436,6 +522,22 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
                   >
                     +{trim.left.toFixed(0)}
                   </text>
+                  {leftCutLabel && (
+                    <text
+                      x={(leftStart.x + leftEnd.x) / 2}
+                      y={leftStart.y + cutFontPx + 2}
+                      textAnchor="middle"
+                      dominantBaseline="alphabetic"
+                      fontSize={cutFontPx}
+                      fill="#1f2937"
+                      fontWeight={600}
+                      stroke="#ffffff"
+                      strokeWidth={3}
+                      style={{ paintOrder: 'stroke' }}
+                    >
+                      {leftCutLabel}
+                    </text>
+                  )}
                 </g>
               )}
               {showRight && (
@@ -464,6 +566,22 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
                   >
                     +{trim.right.toFixed(0)}
                   </text>
+                  {rightCutLabel && (
+                    <text
+                      x={(rightStart.x + rightEnd.x) / 2}
+                      y={rightStart.y + cutFontPx + 2}
+                      textAnchor="middle"
+                      dominantBaseline="alphabetic"
+                      fontSize={cutFontPx}
+                      fill="#1f2937"
+                      fontWeight={600}
+                      stroke="#ffffff"
+                      strokeWidth={3}
+                      style={{ paintOrder: 'stroke' }}
+                    >
+                      {rightCutLabel}
+                    </text>
+                  )}
                 </g>
               )}
             </g>
