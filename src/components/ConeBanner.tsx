@@ -1,6 +1,7 @@
 import { rootEndDiameter, sweepMm, topEndDiameter } from '../core/taper';
 import type { LogInput } from '../core/types';
 import type { ConeState } from '../state/usePlan';
+import { useT } from '../i18n/I18nProvider';
 
 interface Props {
   cone: ConeState;
@@ -45,6 +46,7 @@ interface Props {
  * over-compensate.
  */
 export function ConeBanner({ cone, log, rotationDeg = 0 }: Props) {
+  const t = useT();
   const state: 'active' | 'noDrop' | 'bedFlat' | 'resolved' = cone.resolved
     ? 'resolved'
     : cone.bedFlat
@@ -82,9 +84,9 @@ export function ConeBanner({ cone, log, rotationDeg = 0 }: Props) {
             rotationDeg={rotationDeg}
           />
           <span className="text-amber-800">
-            Lower root-side support by{' '}
+            {t('cone.lowerRoot')}{' '}
             <span className="font-bold tabular-nums text-amber-900">
-              {cone.rootDropMm.toFixed(0)} mm
+              {cone.rootDropMm.toFixed(0)} {t('cone.mm')}
             </span>
           </span>
         </div>
@@ -97,10 +99,10 @@ export function ConeBanner({ cone, log, rotationDeg = 0 }: Props) {
   // wants to know exactly why.
   const tooltip =
     state === 'resolved'
-      ? 'Cone resolved — two cuts 180° apart, the pith is horizontal between the supports.'
+      ? t('cone.tooltip.resolved')
       : state === 'bedFlat'
-        ? 'Log rests on a flat cut face — the taper is already compensated at this rotation, so no further drop is needed here.'
-        : 'Measured diameters match (or root is smaller) — no support drop needed yet.';
+        ? t('cone.tooltip.bedFlat')
+        : t('cone.tooltip.noDrop');
 
   // Curved log + cone-OK: render the neutral banner WITH the figure
   // so the sawyer can still see the bow rotate as they spin the log.
@@ -120,9 +122,9 @@ export function ConeBanner({ cone, log, rotationDeg = 0 }: Props) {
             rootDropMm={0}
             rotationDeg={rotationDeg}
           />
-          <span className="font-medium text-forest-800">Cone resolved</span>
+          <span className="font-medium text-forest-800">{t('cone.resolved')}</span>
           <span className="text-forest-700 hidden sm:inline text-xs">
-            — bow follows the log rotation.
+            {t('cone.resolved.curve')}
           </span>
         </div>
       </div>
@@ -139,9 +141,9 @@ export function ConeBanner({ cone, log, rotationDeg = 0 }: Props) {
     >
       <div className={body}>
         <span aria-hidden className="text-forest-600 text-lg leading-none">✓</span>
-        <span className="font-medium text-forest-800">Cone resolved</span>
+        <span className="font-medium text-forest-800">{t('cone.resolved')}</span>
         <span className="text-forest-700 hidden sm:inline text-xs">
-          — no support drop needed at this rotation.
+          {t('cone.resolved.body')}
         </span>
       </div>
     </div>
@@ -208,6 +210,7 @@ interface FigureProps {
  * proportional schematic so the banner state reads at a glance.
  */
 function ConeFigure({ variant, log, rootDropMm, rotationDeg: _rotationDeg = 0 }: FigureProps) {
+  const t = useT();
   // Grown from the earlier 96×36 since the banner no longer carries
   // a "Cone compensation:" label — the figure now claims that space.
   // All downstream sizes (logPath, support blocks, drop arrow, pith
@@ -393,11 +396,11 @@ function ConeFigure({ variant, log, rootDropMm, rotationDeg: _rotationDeg = 0 }:
       aria-label={
         variant === 'noDrop'
           ? sweepMm(log) > 0
-            ? 'Curved log on supports, both ends equal'
-            : 'Log on supports, both ends equal'
+            ? t('cone.aria.curved.equal')
+            : t('cone.aria.straight.equal')
           : sweepMm(log) > 0
-            ? `Curved log on supports, lower root by ${rootDropMm.toFixed(0)} millimetres`
-            : `Log on supports, lower root by ${rootDropMm.toFixed(0)} millimetres`
+            ? t('cone.aria.curved', { mm: rootDropMm.toFixed(0) })
+            : t('cone.aria.straight', { mm: rootDropMm.toFixed(0) })
       }
       className="flex-none"
     >

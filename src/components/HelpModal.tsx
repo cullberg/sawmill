@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useT, useTRich } from '../i18n/I18nProvider';
 
 interface Props {
   onClose: () => void;
@@ -12,16 +13,26 @@ interface Props {
  * Layout:
  *   - Sticky header (title + close) so the dismiss affordance is always
  *     visible while the body scrolls.
- *   - Scrollable body with a hero cross-section diagram, a lead
- *     paragraph, a series of collapsible <details> steps (Step 1 open
- *     by default so the user sees something useful without clicking),
- *     then Keyboard and Glossary sections and a small "About" footer.
+ *   - Scrollable body with a hero cross-section diagram, a short
+ *     "Quick guidance" cheat-sheet (so a returning user can scan and
+ *     dive back in without re-reading every step), then the full
+ *     step-by-step (Step 1 open by default) covering all the details
+ *     of every feature, then Keyboard and Glossary sections.
  *   - Sticky footer button that closes the dialog.
  *
  * Keyboard: Escape closes the dialog. That's the only shortcut wired
  * app-wide and it's documented in the Keyboard section below.
+ *
+ * Translation: every prose string flows through `t()` (plain text) or
+ * `tRich()` (`**bold**` / `*italic*` markup expanded into <strong> /
+ * <em>). The component tree itself is locale-agnostic — only the keys
+ * change between languages. See `src/i18n/strings.ts` for the
+ * en / sv tables.
  */
 export function HelpModal({ onClose }: Props) {
+  const t = useT();
+  const tRich = useTRich();
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -46,12 +57,12 @@ export function HelpModal({ onClose }: Props) {
             without hiding the dismiss affordance. */}
         <header className="flex items-center justify-between px-6 py-3 border-b border-steel-100 bg-white">
           <h2 id="help-title" className="text-lg font-bold text-steel-900">
-            Northern Lights Sawmill Planner
+            {t('help.title')}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close help"
+            aria-label={t('help.close.aria')}
             className="text-steel-500 hover:text-forest-700 text-2xl leading-none px-2 py-0.5 rounded hover:bg-stone-100"
           >
             ×
@@ -74,244 +85,158 @@ export function HelpModal({ onClose }: Props) {
           <figure className="-mx-6 -mt-4 mb-1">
             <img
               src={`${import.meta.env.BASE_URL}sawmill-photo.jpg`}
-              alt="The physical sawmill this planner was built for: a bandsaw mill under a freshly-built open timber shelter with a red-painted workshop behind, two pine logs queued on the infeed bunk ready to saw."
+              alt={t('help.hero.alt')}
               className="w-full h-36 sm:h-56 object-cover"
               loading="lazy"
               decoding="async"
             />
             <figcaption className="px-6 pt-1.5 text-xs text-stone-500 italic">
-              The mill this planner was built for — logs queued on the
-              infeed bunk, ready to saw.
+              {t('help.hero.caption')}
             </figcaption>
           </figure>
 
-          <p className="text-steel-700">
-            A typical session, top to bottom. You'll only need to tweak the Mill
-            settings and Preferred dimensions once — after that, sawing a log
-            takes less than a minute of data entry per log. Click any step
-            below to expand it.
-          </p>
+          {/* ── Quick guidance cheat-sheet ──
+              Sits above the detailed walkthrough so a returning user
+              who already knows the app can scan the numbered list and
+              jump back into a session without re-reading every step.
+              First-time users keep scrolling for the full details
+              below. The sheet deliberately avoids long sentences;
+              every line is one verb plus one noun where possible. */}
+          <section className="rounded-lg border border-forest-200 bg-forest-50 px-4 py-3">
+            <h3 className="font-semibold text-forest-900 mb-2 flex items-center gap-2">
+              <span aria-hidden className="text-forest-600">⚡</span>
+              {t('help.quick.heading')}
+            </h3>
+            <ol className="list-decimal pl-5 space-y-1 text-steel-800 marker:text-forest-700 marker:font-semibold">
+              <li>{tRich('help.quick.1')}</li>
+              <li>{tRich('help.quick.2')}</li>
+              <li>{tRich('help.quick.3')}</li>
+              <li>{tRich('help.quick.4')}</li>
+              <li>{tRich('help.quick.5')}</li>
+              <li>{tRich('help.quick.6')}</li>
+              <li>{tRich('help.quick.7')}</li>
+              <li>{tRich('help.quick.8')}</li>
+            </ol>
+            <p className="text-xs text-forest-800 mt-2">
+              {t('help.quick.persists')}
+            </p>
+          </section>
 
-          <Step n={1} title="Measure your log" defaultOpen>
-            <p>
-              Sit the log on its two supports. With a diameter tape or calipers,
-              measure the <b>Ø at each support</b> — one near the root (thicker)
-              end and one near the top (thinner) end.
-            </p>
-            <p>
-              Open the <b>Log measurements</b> pane and enter both values in
-              centimetres, then the <b>distance between supports</b> and the{' '}
-              <b>log length</b>, both in cm. The app will show what sticks out
-              past each support as a sanity check, and compute the extrapolated
-              end diameters, taper and volume automatically.
-            </p>
-          </Step>
+          <p className="text-steel-700">{t('help.lead')}</p>
 
-          <Step n={2} title="Read the cone-compensation banner">
-            <p>
-              At the top of the illustration, a red banner tells you how many
-              millimetres to <b>lower the root-side support</b>. Doing so aligns
-              the <b>pith</b> horizontally between the supports so your first
-              cut is parallel to the centre line, not the bark.
-            </p>
-            <p>
-              The banner turns a neutral grey if no drop is needed (equal
-              diameters, or inverse taper at the root flare), and forest-green{' '}
-              <b>"Cone resolved"</b> once you've cut two reference faces 180°
-              apart.
-            </p>
-          </Step>
-
-          <Step n={3} title="Pick your preferred plank dimensions">
-            <p>
-              Open <b>Preferred dimensions</b>. The list ships with the full
-              Swedish dimension catalogue (25 / 38 / 50 / 63 / 75 / 100 / 125 /
-              150 / 175 / 200 / 225 / 250 / 300 mm thickness families). Tick the
-              sizes you want today, drag to reorder (higher = higher priority),
-              and tap <b>+ Add</b> for anything missing. Your choices are saved
-              in the browser.
-            </p>
-            <p>
-              Under <b>Mill settings</b> you can also pick one of three layout
-              strategies:
-            </p>
+          <Step n={1} title={t('help.step1.title')} defaultOpen>
+            <p>{tRich('help.step1.p1')}</p>
+            <p>{tRich('help.step1.p2')}</p>
+            <p>{tRich('help.step1.p3')}</p>
             <ul className="list-disc pl-5 space-y-1">
-              <li>
-                <b>Strict priority</b> (default) — places your #1 spec wherever
-                it fits, then #2 for the gaps, and so on. The spec at the top
-                of the list always becomes the central cant if it fits.
-              </li>
-              <li>
-                <b>Maximize value</b> — you fill in a <i>value</i> number
-                next to each spec (a price, a weight, anything you want
-                to rank by). The planner then tries <i>every</i> enabled
-                spec as the central cant and keeps the layout with the
-                highest total value — often a different cant than "Strict
-                priority" would pick.
-              </li>
-              <li>
-                <b>Minimize waste</b> — same "try every cant" pass, but
-                the winner is the layout whose planks cover the most
-                area of the log cross-section. Ignores list order and
-                value; the biggest fitting rectangles win.
-              </li>
+              <li>{tRich('help.step1.li1')}</li>
+              <li>{tRich('help.step1.li2')}</li>
+              <li>{tRich('help.step1.li3')}</li>
+            </ul>
+            <p>{tRich('help.step1.p4')}</p>
+          </Step>
+
+          <Step n={2} title={t('help.step2.title')}>
+            <p>{tRich('help.step2.p1')}</p>
+            <p>{tRich('help.step2.p2')}</p>
+            <p>{tRich('help.step2.p3')}</p>
+          </Step>
+
+          <Step n={3} title={t('help.step3.title')}>
+            <p>{tRich('help.step3.p1')}</p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>{tRich('help.step3.li1')}</li>
+              <li>{tRich('help.step3.li2')}</li>
+              <li>{tRich('help.step3.li3')}</li>
+              <li>{tRich('help.step3.li4')}</li>
+              <li>{tRich('help.step3.li5')}</li>
+            </ul>
+            <p>{tRich('help.step3.p2')}</p>
+          </Step>
+
+          <Step n={4} title={t('help.step4.title')}>
+            <p>{tRich('help.step4.p1')}</p>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li>{tRich('help.step4.li1')}</li>
+              <li>{tRich('help.step4.li2')}</li>
+              <li>{tRich('help.step4.li3')}</li>
+              <li>{tRich('help.step4.li4')}</li>
             </ul>
           </Step>
 
-          <Step n={4} title="Square the cant (first four slabs)">
-            <p>
-              A fresh round log always starts with <b>four squaring slabs</b>,
-              one per face. The <b>NEXT</b> pill walks you through them as{' '}
-              <i>"Squaring slab (1 of 4)"</i> … <i>"(4 of 4)"</i>, cycling the
-              recommended rotation 0° → 90° → 180° → 270°. After the fourth
-              slab you have a square cant with four flat faces and no bark —
-              only then does the planner start freeing planks.
-            </p>
+          <Step n={5} title={t('help.step5.title')}>
+            <p>{tRich('help.step5.p1')}</p>
             <SquaringDiagram />
-            <p>
-              The big <b>Set chain / blade height</b> readout shows the number
-              you crank into the mill — distance from the bed to the saw, in
-              mm. Set the mill to that height, make the cut, then tap the big
-              red <b>↓ Cut</b> button to record it. Rolling or repositioning
-              the log on the bed is still your job; the app only tracks the
-              cuts.
-            </p>
-            <p>
-              By default <b>Auto-rotate during squaring</b> is on (Mill
-              settings): the moment you tap Cut, the illustration rotates the
-              log 90° to the next face so the NEXT pill, the height readout
-              and the end-view all preview the next setup. Physically reposition
-              the log to match, then tap Cut again. After the fourth slab the
-              log auto-rotates once more — straight to the best planking face
-              — so you can keep going without a manual spin.
-            </p>
-            <p>
-              Prefer to rotate manually? Turn the toggle off. The log will
-              stay at whatever rotation you set, and the NEXT pill will
-              remind you <i>"Rotate to 90° first"</i> whenever you drift off
-              the recommended face.
-            </p>
-            <p className="text-xs text-stone-500">
-              Tip: if you're running a bandsaw mill, switch <b>Cutting tool</b>
-              under Mill settings from <i>Chain</i> to <i>Blade</i> — the UI
-              labels will follow.
-            </p>
+            <p>{tRich('help.step5.p2')}</p>
+            <p>{tRich('help.step5.p3')}</p>
+            <p>{tRich('help.step5.p4')}</p>
+            <p className="text-xs text-stone-500">{tRich('help.step5.tip')}</p>
           </Step>
 
-          <Step n={5} title="Plank top-to-bottom">
-            <p>
-              Once the cant is squared, the NEXT pill switches to{' '}
-              <i>"Plank cut → 150×50"</i> and works down the face with the
-              tallest remaining stack. Because every plank's top edge is now
-              flush with the squared face above it, <b>each plank comes off
-              in a single cut</b> — no waste slab in between. The
-              illustration and the big height readout update after every cut
-              so you never have to guess the next crank setting.
-            </p>
-            <p>
-              When one face is empty, rotate 180° (or 90°) to reach the next
-              stack. If you rotate to a face the planner didn't pick, the NEXT
-              pill adds a small <i>↻ Rotate to X°</i> hint — follow it or
-              ignore it, the height readout tracks whichever face you chose.
-            </p>
-            <p>
-              Planks that were fully inside the squared cant come off clean.
-              Side boards and the first / last plank on any face often keep
-              a bit of <b>wane</b> (bark-edge curvature) on one or two sides
-              — check the <b>Edging guide</b> below the Controls for the
-              second-pass widths that trim them square.
-            </p>
+          <Step n={6} title={t('help.step6.title')}>
+            <p>{tRich('help.step6.p1')}</p>
+            <p>{tRich('help.step6.p2')}</p>
+            <p>{tRich('help.step6.p3')}</p>
           </Step>
 
-          <Step n={6} title="Rotate and keep cutting">
-            <p>
-              Use <b>⟲ 90°</b> / <b>90° ⟳</b> to spin the log manually at any
-              time. Rotating is free — it doesn't use an undo slot. The
-              illustration shows your current rotation ("top 0°" label above
-              the log) and which planks are still to cut.
-            </p>
-            <p>
-              Made a mistake? <b>↑ Undo</b> rewinds the last cut or rotation,{' '}
-              <b>↷ Redo</b> replays it. You get 50 steps of history.
-            </p>
+          <Step n={7} title={t('help.step7.title')}>
+            <p>{tRich('help.step7.p1')}</p>
+            <p>{tRich('help.step7.p2')}</p>
           </Step>
 
-          <Step n={7} title="Finish the log">
-            <p>
-              When the last plank is the one sitting on the bed, the button
-              turns green and reads <b>✓ Lift final plank</b>. Tap it to record
-              the plank as produced.
-            </p>
-            <p>
-              Once every planned plank is sawn, the whole Controls card flips
-              into a <b>Log complete</b> banner with a big green{' '}
-              <b>↻ Start next log</b> button. Tap that to clear the cut history
-              and jump into the Log measurements pane for your next log. Mill
-              settings and Preferred dimensions stay put — only the log data
-              changes.
-            </p>
-            <p>
-              The completed log is archived automatically into the{' '}
-              <b>Log history</b> panel in the sidebar — with its dimensions,
-              cuts, produced planks and yield. The archive keeps the last 50
-              logs and is stored in this browser only (no server, no account).
-              Expand the panel to see aggregate stats (total volume, per-size
-              plank totals), <b>Reopen</b> any past log into the planner,
-              delete individual entries, or <b>Export CSV</b> of everything for
-              your records.
-            </p>
+          <Step n={8} title={t('help.step8.title')}>
+            <p>{tRich('help.step8.p1')}</p>
+            <p>{tRich('help.step8.p2')}</p>
+            <p>{tRich('help.step8.p3')}</p>
           </Step>
 
-          <Step n={8} title="Check your yield">
-            <p>
-              Expand <b>Log report</b> (below the Cut button) any time to see
-              taper, root / top Ø, volume, cuts made, end-view yield %, and a
-              per-size tally of planks planned vs. actually sawn.
-            </p>
+          <Step n={9} title={t('help.step9.title')}>
+            <p>{tRich('help.step9.p1')}</p>
           </Step>
 
           <section className="rounded-lg bg-stone-50 border border-stone-200 px-4 py-3 mt-4">
-            <h3 className="font-semibold text-steel-900 mb-1">Keyboard</h3>
+            <h3 className="font-semibold text-steel-900 mb-1">
+              {t('help.keyboard.heading')}
+            </h3>
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-              <dt className="font-medium text-steel-700">Esc</dt>
-              <dd className="text-steel-600">
-                Closes this help dialog (and the first-run splash). That's the
-                only app-wide shortcut — everything else is on-screen so the
-                workshop-tablet use case isn't keyboard-dependent.
-              </dd>
+              <dt className="font-medium text-steel-700">
+                {t('help.keyboard.esc.key')}
+              </dt>
+              <dd className="text-steel-600">{t('help.keyboard.esc.body')}</dd>
             </dl>
           </section>
 
           <section className="rounded-lg bg-stone-50 border border-stone-200 px-4 py-3">
-            <h3 className="font-semibold text-steel-900 mb-1">Glossary</h3>
+            <h3 className="font-semibold text-steel-900 mb-1">
+              {t('help.glossary.heading')}
+            </h3>
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-              <dt className="font-medium text-steel-700">Kerf</dt>
-              <dd className="text-steel-600">Width of the cut — sawdust removed per pass.</dd>
-              <dt className="font-medium text-steel-700">Cant</dt>
-              <dd className="text-steel-600">The squared-off centre of the log after the first slab cuts.</dd>
-              <dt className="font-medium text-steel-700">Slab</dt>
-              <dd className="text-steel-600">The rounded waste piece cut off before you reach good plank stock.</dd>
-              <dt className="font-medium text-steel-700">Cone resolved</dt>
-              <dd className="text-steel-600">Two faces cut 180° apart — the pith is now horizontal, taper is "beaten".</dd>
-              <dt className="font-medium text-steel-700">Design Ø</dt>
-              <dd className="text-steel-600">Smallest extrapolated end diameter — what full-length planks must fit inside.</dd>
-              <dt className="font-medium text-steel-700">Pith</dt>
-              <dd className="text-steel-600">
-                The geometric centre of the log, roughly where the tree's
-                original growth axis ran. Planks straddle or flank it.
-              </dd>
-              <dt className="font-medium text-steel-700">Wane</dt>
-              <dd className="text-steel-600">
-                Bark edge or missing corner on a plank that wasn't fully
-                inside the squared cant. Trimmed away in a second pass.
-              </dd>
-              <dt className="font-medium text-steel-700">Edging</dt>
-              <dd className="text-steel-600">
-                The second-pass cut that trims a plank's wane side(s) to
-                its target width. Plan is in the Edging guide.
-              </dd>
-              <dt className="font-medium text-steel-700">Root / top end</dt>
-              <dd className="text-steel-600">Root = wider, tree-base end. Top = narrower, crown end.</dd>
+              <dt className="font-medium text-steel-700">{t('help.glossary.kerf.t')}</dt>
+              <dd className="text-steel-600">{t('help.glossary.kerf.d')}</dd>
+              <dt className="font-medium text-steel-700">{t('help.glossary.cant.t')}</dt>
+              <dd className="text-steel-600">{t('help.glossary.cant.d')}</dd>
+              <dt className="font-medium text-steel-700">{t('help.glossary.slab.t')}</dt>
+              <dd className="text-steel-600">{t('help.glossary.slab.d')}</dd>
+              <dt className="font-medium text-steel-700">{t('help.glossary.coneResolved.t')}</dt>
+              <dd className="text-steel-600">{t('help.glossary.coneResolved.d')}</dd>
+              <dt className="font-medium text-steel-700">{t('help.glossary.designD.t')}</dt>
+              <dd className="text-steel-600">{t('help.glossary.designD.d')}</dd>
+              <dt className="font-medium text-steel-700">{t('help.glossary.sweep.t')}</dt>
+              <dd className="text-steel-600">{t('help.glossary.sweep.d')}</dd>
+              <dt className="font-medium text-steel-700">{t('help.glossary.pith.t')}</dt>
+              <dd className="text-steel-600">{t('help.glossary.pith.d')}</dd>
+              <dt className="font-medium text-steel-700">{t('help.glossary.quartersawn.t')}</dt>
+              <dd className="text-steel-600">{t('help.glossary.quartersawn.d')}</dd>
+              <dt className="font-medium text-steel-700">{t('help.glossary.flatsawn.t')}</dt>
+              <dd className="text-steel-600">{t('help.glossary.flatsawn.d')}</dd>
+              <dt className="font-medium text-steel-700">{t('help.glossary.cup.t')}</dt>
+              <dd className="text-steel-600">{t('help.glossary.cup.d')}</dd>
+              <dt className="font-medium text-steel-700">{t('help.glossary.wane.t')}</dt>
+              <dd className="text-steel-600">{t('help.glossary.wane.d')}</dd>
+              <dt className="font-medium text-steel-700">{t('help.glossary.edging.t')}</dt>
+              <dd className="text-steel-600">{t('help.glossary.edging.d')}</dd>
+              <dt className="font-medium text-steel-700">{t('help.glossary.rootTop.t')}</dt>
+              <dd className="text-steel-600">{t('help.glossary.rootTop.d')}</dd>
             </dl>
           </section>
         </div>
@@ -322,7 +247,7 @@ export function HelpModal({ onClose }: Props) {
             onClick={onClose}
             className="rounded-lg bg-forest-500 hover:bg-forest-600 text-white font-semibold px-5 py-2 shadow-sm"
           >
-            Back to planner
+            {t('help.back')}
           </button>
         </footer>
       </div>
@@ -394,6 +319,7 @@ function Step({
  * pills sit just outside each cut.
  */
 function SquaringDiagram() {
+  const t = useT();
   const cuts: Array<{ n: number; x1: number; y1: number; x2: number; y2: number; lx: number; ly: number }> = [
     // 0° → top face: horizontal cut across the top, numbered "1" above.
     { n: 1, x1: -45, y1: -40, x2: 45, y2: -40, lx: 0, ly: -52 },
@@ -410,7 +336,7 @@ function SquaringDiagram() {
         viewBox="-60 -60 120 120"
         className="w-40 h-40"
         role="img"
-        aria-label="Diagram of the four squaring slabs: the round log with cut 1 across the top, cut 2 on the right, cut 3 across the bottom, cut 4 on the left — the order produced by the auto-rotate workflow."
+        aria-label={t('help.squaring.aria')}
       >
         {/* Log outline */}
         <circle cx="0" cy="0" r="50" fill="#f5efe6" stroke="#8b6f4e" strokeWidth="1.2" />
@@ -443,8 +369,7 @@ function SquaringDiagram() {
         ))}
       </svg>
       <figcaption className="text-xs text-stone-500 italic text-center -mt-1">
-        Four squaring slabs, in the order the auto-rotate workflow takes
-        them: top → right → bottom → left.
+        {t('help.squaring.caption')}
       </figcaption>
     </figure>
   );

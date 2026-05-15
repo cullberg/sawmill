@@ -1,4 +1,5 @@
 import type { MillSettings } from '../core/types';
+import { useT } from '../i18n/I18nProvider';
 
 interface Props {
   settings: MillSettings;
@@ -6,6 +7,7 @@ interface Props {
 }
 
 export function SettingsForm({ settings, onChange }: Props) {
+  const t = useT();
   const update = <K extends keyof MillSettings>(key: K, value: MillSettings[K]) => {
     onChange({ ...settings, [key]: value });
   };
@@ -14,30 +16,30 @@ export function SettingsForm({ settings, onChange }: Props) {
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <StepperField
-          label="Kerf (mm)"
+          label={t('settings.kerf')}
           value={settings.kerf}
           onChange={(v) => update('kerf', v)}
           step={1}
           min={0}
         />
         <StepperField
-          label="Min slab (mm)"
+          label={t('settings.minSlab')}
           value={settings.minSlab}
           onChange={(v) => update('minSlab', v)}
           step={1}
           min={0}
         />
         <StepperField
-          label="Edge clearance (mm)"
-          hint="Extra inset from bark to avoid wane"
+          label={t('settings.edgeClearance')}
+          hint={t('settings.edgeClearance.hint')}
           value={settings.edgeClearance}
           onChange={(v) => update('edgeClearance', v)}
           step={1}
           min={0}
         />
         <Field
-          label="Cutting tool"
-          hint="Cosmetic only — label used in the UI for your saw"
+          label={t('settings.cuttingTool')}
+          hint={t('settings.cuttingTool.hint')}
         >
           <select
             value={settings.cuttingTool}
@@ -46,8 +48,8 @@ export function SettingsForm({ settings, onChange }: Props) {
             }
             className="w-full rounded-md border-stone-300 bg-stone-50 px-2 py-1.5 border"
           >
-            <option value="chain">Chain (chainsaw mill)</option>
-            <option value="blade">Blade (bandsaw mill)</option>
+            <option value="chain">{t('settings.cuttingTool.chain')}</option>
+            <option value="blade">{t('settings.cuttingTool.blade')}</option>
           </select>
         </Field>
       </div>
@@ -60,14 +62,8 @@ export function SettingsForm({ settings, onChange }: Props) {
           className="mt-0.5 h-4 w-4 rounded border-stone-400 text-forest-600 focus:ring-forest-500"
         />
         <span className="flex-1">
-          <span className="text-stone-700 font-medium">Auto-rotate during squaring</span>
-          <span className="block text-xs text-stone-500">
-            After each of the first four squaring slabs, the log spins
-            automatically to the next face (0° → 90° → 180° → 270°) so the
-            NEXT pill and height readout preview the next setup. Uncheck
-            to rotate manually — the planner will then hint{' '}
-            <i>"Rotate to X° first"</i> when you're off the recommended face.
-          </span>
+          <span className="text-stone-700 font-medium">{t('settings.autoRotate.title')}</span>
+          <span className="block text-xs text-stone-500">{t('settings.autoRotate.body')}</span>
         </span>
       </label>
     </div>
@@ -111,6 +107,7 @@ function StepperField({
   step?: number;
   min?: number;
 }) {
+  const t = useT();
   const baseInputCls =
     'block w-full border-stone-300 bg-stone-50 border focus:border-forest-500 focus:ring-forest-500';
   const sizeCls = 'px-2 py-2.5 text-lg font-semibold tabular-nums';
@@ -133,7 +130,7 @@ function StepperField({
           type="button"
           onClick={() => stepBy(-1)}
           disabled={decDisabled}
-          aria-label={`Decrease ${label} by ${step}`}
+          aria-label={t('settings.dec.aria', { label, step })}
           className={`${btnCls} rounded-l-md border-r-0`}
         >
           −
@@ -154,7 +151,7 @@ function StepperField({
         <button
           type="button"
           onClick={() => stepBy(1)}
-          aria-label={`Increase ${label} by ${step}`}
+          aria-label={t('settings.inc.aria', { label, step })}
           className={`${btnCls} rounded-r-md border-l-0`}
         >
           +

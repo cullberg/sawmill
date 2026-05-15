@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AppSettingsForm } from './components/AppSettingsForm';
 import { Collapsible } from './components/Collapsible';
 import { ConeBanner } from './components/ConeBanner';
 import { Controls } from './components/Controls';
@@ -13,6 +14,7 @@ import { PwaStatus } from './components/PwaStatus';
 import { SettingsForm } from './components/SettingsForm';
 import { SplashScreen, useSplashState } from './components/SplashScreen';
 import { Summary } from './components/Summary';
+import { LOCALES, useI18n, useT } from './i18n/I18nProvider';
 import { useLogArchive } from './state/useLogArchive';
 import { usePlan } from './state/usePlan';
 
@@ -35,6 +37,8 @@ function useIsLargeScreen(): boolean {
 }
 
 export default function App() {
+  const t = useT();
+  const { locale } = useI18n();
   // The log archive lives outside of usePlan so its lifecycle is
   // independent: reopening an archived log or resetting the current
   // plan never touches the archive. usePlan calls `archivePlan` via
@@ -83,10 +87,14 @@ export default function App() {
   const logSummary = `Ø ${(plan.log.rootSideDiameter / 10).toFixed(1)}/${(
     plan.log.topSideDiameter / 10
   ).toFixed(1)} cm · ${(plan.log.length / 10).toFixed(0)} cm`;
-  const prioritySummary = `${plan.priorityList.filter((s) => s.enabled).length}/${
-    plan.priorityList.length
-  } enabled`;
-  const settingsSummary = `kerf ${plan.settings.kerf} · bark ${plan.settings.barkThickness}`;
+  const prioritySummary = t('panel.priority.summary', {
+    enabled: plan.priorityList.filter((s) => s.enabled).length,
+    total: plan.priorityList.length
+  });
+  const settingsSummary = t('panel.settings.summary', {
+    kerf: plan.settings.kerf,
+    bark: plan.settings.barkThickness
+  });
 
   /**
    * "OK, back to cutting" from the Log measurements panel: close the
@@ -115,7 +123,7 @@ export default function App() {
           ("/sawmill/favicon.svg"). */}
       <div
         className="fixed top-3 left-3 z-40 w-10 h-10 rounded-xl overflow-hidden shadow-md bg-[#0b1026]"
-        title="Northern Lights Sawmill Planner"
+        title={t('app.title')}
         aria-hidden
       >
         <img
@@ -126,24 +134,22 @@ export default function App() {
         />
       </div>
 
-      {/* Floating help button — always reachable without eating precious
-          vertical space in the main layout. `fixed` so it stays visible
-          when the user scrolls the long sidebar on small screens.
-
-          Forest-green pill (matching the primary Cut button) with a
-          visible "Help" label on sm+ screens so new users don't have
-          to guess what the "?" means; narrow-mobile viewports keep
-          just the "?" to save space. */}
+      {/* Floating help button — always reachable without eating
+          precious vertical space in the main layout. `fixed` so it
+          stays visible when the user scrolls the long sidebar on
+          small screens. The language picker used to live here too,
+          but it now belongs in the App settings panel below — keeps
+          the floating bar focused on a single primary action. */}
       <button
         type="button"
         onClick={() => setHelpOpen(true)}
-        aria-label="Open help"
-        title="How does the planner work?"
+        aria-label={t('app.help.aria')}
+        title={t('app.help.title')}
         className="fixed top-3 right-3 z-40 rounded-full bg-forest-500 hover:bg-forest-600 text-white shadow-md font-semibold flex items-center gap-1.5 px-3 h-10 text-sm"
         style={{ backgroundColor: '#35671e', color: '#ffffff' }}
       >
         <span aria-hidden className="text-base leading-none">?</span>
-        <span className="hidden sm:inline">Help</span>
+        <span className="hidden sm:inline">{t('app.help.button')}</span>
       </button>
 
       <main className="max-w-6xl mx-auto p-3 sm:p-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -193,7 +199,7 @@ export default function App() {
               illustration-first primary column intact. */}
           <Collapsible
             id="log"
-            title="Log measurements"
+            title={t('panel.log')}
             summary={logSummary}
             defaultOpen={defaultOpen}
             accent="wood"
@@ -211,8 +217,12 @@ export default function App() {
               from the illustration. */}
           <Collapsible
             id="edging"
-            title="Edging guide"
-            summary={`${plan.settings.cuttingTool === 'chain' ? 'Chain' : 'Blade'} heights for the second-pass width trim`}
+            title={t('panel.edging')}
+            summary={t(
+              plan.settings.cuttingTool === 'chain'
+                ? 'panel.edging.summary.chain'
+                : 'panel.edging.summary.blade'
+            )}
             defaultOpen={false}
             accent="forest"
           >
@@ -220,8 +230,11 @@ export default function App() {
           </Collapsible>
           <Collapsible
             id="summary"
-            title="Log report"
-            summary={`${plan.cuts.length} cuts · ${plan.produced.length} sawn`}
+            title={t('panel.report')}
+            summary={t('panel.report.summary', {
+              cuts: plan.cuts.length,
+              produced: plan.produced.length
+            })}
             defaultOpen={false}
             accent="forest"
           >
@@ -235,7 +248,7 @@ export default function App() {
         <div className="space-y-3 order-2">
           <Collapsible
             id="priority"
-            title="Preferred dimensions"
+            title={t('panel.priority')}
             summary={prioritySummary}
             defaultOpen={defaultOpen}
             accent="forest"
@@ -249,7 +262,7 @@ export default function App() {
 
           <Collapsible
             id="settings"
-            title="Mill settings"
+            title={t('panel.settings')}
             summary={settingsSummary}
             defaultOpen={defaultOpen}
             accent="steel"
@@ -264,11 +277,13 @@ export default function App() {
               users know the panel has something in it without opening. */}
           <Collapsible
             id="history"
-            title="Log history"
+            title={t('panel.history')}
             summary={
               archive.length === 0
-                ? 'no logs yet'
-                : `${archive.length} log${archive.length === 1 ? '' : 's'} archived`
+                ? t('panel.history.summary.empty')
+                : archive.length === 1
+                  ? t('panel.history.summary.one', { n: archive.length })
+                  : t('panel.history.summary.many', { n: archive.length })
             }
             defaultOpen={false}
             accent="wood"
@@ -280,11 +295,32 @@ export default function App() {
               onReopen={(entry) => loadSnapshot(entry.plan)}
             />
           </Collapsible>
+
+          {/* App settings — cross-cutting UI preferences that aren't
+              tied to a specific log or saw. Currently just the
+              language picker, but the panel is the natural future
+              home for theme / unit / accessibility toggles. Closed
+              by default because once language is set most users
+              never touch it again. The summary shows the active
+              language's native name so the panel announces its
+              state without expanding. */}
+          <Collapsible
+            id="app-settings"
+            title={t('panel.app')}
+            summary={t('panel.app.summary', {
+              lang:
+                LOCALES.find((l) => l.code === locale)?.label ?? locale
+            })}
+            defaultOpen={false}
+            accent="steel"
+          >
+            <AppSettingsForm />
+          </Collapsible>
         </div>
       </main>
 
       <footer className="max-w-6xl mx-auto p-4 text-xs text-stone-500">
-        <p>Log measurements in cm, mill settings and plank dimensions in mm. Data is saved in your browser.</p>
+        <p>{t('app.footer.units')}</p>
       </footer>
 
       {/* Overlays render last so they stack on top of the planner. Both

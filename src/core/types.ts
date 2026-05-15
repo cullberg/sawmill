@@ -68,7 +68,7 @@ export interface MillSettings {
   /** Minimum usable slab thickness the mill can still handle, mm. */
   minSlab: number;
   /** Strategy for auto-layout. */
-  strategy: 'priority' | 'value' | 'min-waste';
+  strategy: 'priority' | 'value' | 'min-waste' | 'min-cup';
   /** Clearance between planks and the log bark edge, mm. */
   edgeClearance: number;
   /** Bark thickness assumed on the uncut (round) sides of the log, mm. */

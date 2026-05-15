@@ -1,6 +1,8 @@
 import { rootEndDiameter, topEndDiameter, designDiameter, sweepMm } from '../core/taper';
 import { barkThicknessForSpecies } from '../core/species';
 import type { LogInput, MillSettings, Species } from '../core/types';
+import { useT } from '../i18n/I18nProvider';
+import type { TranslationKey } from '../i18n/strings';
 
 interface Props {
   log: LogInput;
@@ -47,6 +49,7 @@ const speciesOptions: Species[] = [
 ];
 
 export function LogForm({ log, onChange, settings, onSettingsChange, onDone }: Props) {
+  const t = useT();
   const update = <K extends keyof LogInput>(key: K, value: LogInput[K]) => {
     onChange({ ...log, [key]: value });
   };
@@ -110,10 +113,7 @@ export function LogForm({ log, onChange, settings, onSettingsChange, onDone }: P
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-stone-500">
-        Measure the log diameter at each of the two supports underneath it. The
-        app extrapolates the taper to the log ends.
-      </p>
+      <p className="text-xs text-stone-500">{t('logForm.intro')}</p>
       <div className="grid grid-cols-2 gap-3">
         {/* All log measurements are entered in centimetres — that's how
             sawyers work with tape measures in the field. Planks, kerf, bark
@@ -127,32 +127,32 @@ export function LogForm({ log, onChange, settings, onSettingsChange, onDone }: P
             two back. Bigger input, bolder label, but same grid cell so
             the two-column layout is preserved. */}
         <CmField
-          label="Root-side Ø at support (cm)"
+          label={t('logForm.rootDiameter')}
           valueMm={log.rootSideDiameter}
           onChangeMm={(v) => update('rootSideDiameter', v)}
           prominent
         />
         <CmField
-          label="Top-side Ø at support (cm)"
+          label={t('logForm.topDiameter')}
           valueMm={log.topSideDiameter}
           onChangeMm={(v) => update('topSideDiameter', v)}
           prominent
         />
         <CmField
-          label="Distance between supports (cm)"
+          label={t('logForm.spacing')}
           valueMm={spacingMm}
           onChangeMm={updateSpacing}
           hint={
             spacingInvalid
-              ? '⚠ must be > 0 and < log length'
-              : `${insetCm.toFixed(0)} cm sticks out past each support.`
+              ? t('logForm.spacing.invalid')
+              : t('logForm.spacing.hint', { cm: insetCm.toFixed(0) })
           }
           hintTone={spacingInvalid ? 'warn' : 'default'}
           wholeCm
           prominent
         />
         <CmField
-          label="Log length (cm)"
+          label={t('logForm.length')}
           valueMm={log.length}
           onChangeMm={updateLength}
           wholeCm
@@ -173,13 +173,16 @@ export function LogForm({ log, onChange, settings, onSettingsChange, onDone }: P
           dials in by tapping +/− while eyeballing the string line, so
           the buttons matter even more here than the keyboard. */}
       <CmField
-        label="Worst sweep / curvature (cm)"
+        label={t('logForm.sweep')}
         valueMm={sweep}
         onChangeMm={(v) => update('sweepMm', Math.max(0, v))}
         hint={
           sweep > 0
-            ? `Effective design Ø shrinks to ${(effective / 10).toFixed(1)} cm (was ${(straightMin / 10).toFixed(1)} cm).`
-            : 'String-line offset at the worst point. Leave 0 for straight logs.'
+            ? t('logForm.sweep.hint.active', {
+                effective: (effective / 10).toFixed(1),
+                straight: (straightMin / 10).toFixed(1)
+              })
+            : t('logForm.sweep.hint.zero')
         }
         prominent
         wholeCm
@@ -191,11 +194,14 @@ export function LogForm({ log, onChange, settings, onSettingsChange, onDone }: P
             : 'bg-stone-50 border-stone-200 text-stone-600'
         }`}
       >
-        <span>Extrapolated ends:</span>
+        <span>{t('logForm.extrapolated')}</span>
         <span className="tabular-nums">
           {spacingInvalid
-            ? 'need support spacing > 0'
-            : `root ${(root / 10).toFixed(1)} cm · top ${(top / 10).toFixed(1)} cm`}
+            ? t('logForm.extrapolated.invalid')
+            : t('logForm.extrapolated.values', {
+                root: (root / 10).toFixed(1),
+                top: (top / 10).toFixed(1)
+              })}
         </span>
       </div>
       {/* Sweep advisory — only shown when the sawyer has entered a
@@ -230,11 +236,8 @@ export function LogForm({ log, onChange, settings, onSettingsChange, onDone }: P
             <path d="M 35 19 L 33 22 L 37 22 Z" fill="#57534e" />
           </svg>
           <span>
-            <span className="font-medium">Curved log:</span> roll it so the
-            highest point of the bow is on{' '}
-            <span className="font-semibold">top</span> (ends drooping toward
-            the bed) before the first cut. The first slab will shave off the
-            apex and leave a flat reference face.
+            <span className="font-medium">{t('logForm.curve.advisory.label')}</span>{' '}
+            {t('logForm.curve.advisory')}
           </span>
         </div>
       )}
@@ -258,11 +261,11 @@ export function LogForm({ log, onChange, settings, onSettingsChange, onDone }: P
           for a strict-priority job on one log and a minimise-waste
           job on the next — strategy is per-log intent, not a saw
           property. Full-width because the option labels ("Strict
-          priority" / "Maximize value" / "Minimize waste") need
-          breathing room and the row already shares a panel with two
-          dropdowns above. */}
+          priority" / "Maximize value" / "Minimize waste" / "Minimize
+          cup") need breathing room and the row already shares a panel
+          with two dropdowns above. */}
       <label className="block text-sm">
-        <span className="text-stone-600">Strategy</span>
+        <span className="text-stone-600">{t('logForm.strategy')}</span>
         <select
           value={settings.strategy}
           onChange={(e) =>
@@ -273,9 +276,10 @@ export function LogForm({ log, onChange, settings, onSettingsChange, onDone }: P
           }
           className="mt-1 block w-full rounded-md border-stone-300 bg-stone-50 px-2 py-1.5 border focus:border-forest-500 focus:ring-forest-500"
         >
-          <option value="priority">Strict priority — fill #1 first, then #2, …</option>
-          <option value="value">Maximize value — pick the highest-scoring set</option>
-          <option value="min-waste">Minimize waste — pick the tightest-fitting set</option>
+          <option value="priority">{t('logForm.strategy.priority')}</option>
+          <option value="value">{t('logForm.strategy.value')}</option>
+          <option value="min-waste">{t('logForm.strategy.minWaste')}</option>
+          <option value="min-cup">{t('logForm.strategy.minCup')}</option>
         </select>
       </label>
       {/* "OK, back to cutting" — closes this panel and scrolls the
@@ -300,12 +304,12 @@ export function LogForm({ log, onChange, settings, onSettingsChange, onDone }: P
             }
             title={
               spacingInvalid
-                ? 'Fix the support spacing first'
-                : 'Close this panel and jump back to the Cut button'
+                ? t('logForm.done.disabledTitle')
+                : t('logForm.done.title')
             }
           >
             <span aria-hidden className="text-base leading-none">✓</span>
-            OK, back to cutting
+            {t('logForm.done')}
           </button>
         </div>
       )}
@@ -348,6 +352,7 @@ function CmField({
   wholeCm?: boolean;
   prominent?: boolean;
 }) {
+  const t = useT();
   // Show one decimal only when needed so whole-cm values stay clean (e.g.
   // "40" not "40.0"). `Number()`'s round-trip strips the trailing zero.
   const display = wholeCm
@@ -422,7 +427,7 @@ function CmField({
           type="button"
           onClick={() => stepCm(-1)}
           disabled={decDisabled}
-          aria-label={`Decrease ${label} by 1 cm`}
+          aria-label={t('logForm.stepper.dec.aria', { label })}
           className={`${btnCls} rounded-l-md border-r-0`}
         >
           −
@@ -443,7 +448,7 @@ function CmField({
         <button
           type="button"
           onClick={() => stepCm(1)}
-          aria-label={`Increase ${label} by 1 cm`}
+          aria-label={t('logForm.stepper.inc.aria', { label })}
           className={`${btnCls} rounded-r-md border-l-0`}
         >
           +
@@ -483,6 +488,7 @@ function BarkField({
   onChangeMm: (mm: number) => void;
   speciesDefault: number;
 }) {
+  const t = useT();
   const baseInputCls =
     'block w-full border-stone-300 bg-stone-50 border focus:border-forest-500 focus:ring-forest-500';
   const sizeCls = 'px-2 py-2.5 text-lg font-semibold tabular-nums';
@@ -501,13 +507,13 @@ function BarkField({
 
   return (
     <label className="block text-sm">
-      <span className="text-stone-700 font-medium">Bark thickness (mm)</span>
+      <span className="text-stone-700 font-medium">{t('logForm.bark')}</span>
       <div className="mt-1 flex items-stretch">
         <button
           type="button"
           onClick={() => stepBy(-1)}
           disabled={decDisabled}
-          aria-label="Decrease bark thickness by 1 mm"
+          aria-label={t('logForm.bark.dec.aria')}
           className={`${btnCls} rounded-l-md border-r-0`}
         >
           −
@@ -527,7 +533,7 @@ function BarkField({
         <button
           type="button"
           onClick={() => stepBy(1)}
-          aria-label="Increase bark thickness by 1 mm"
+          aria-label={t('logForm.bark.inc.aria')}
           className={`${btnCls} rounded-r-md border-l-0`}
         >
           +
@@ -535,8 +541,8 @@ function BarkField({
       </div>
       <span className="text-xs text-stone-500">
         {matchesDefault
-          ? `Species default: ${speciesDefault} mm`
-          : `Species default ${speciesDefault} mm — overridden.`}
+          ? t('logForm.bark.default', { n: speciesDefault })
+          : t('logForm.bark.overridden', { n: speciesDefault })}
       </span>
     </label>
   );
@@ -563,9 +569,10 @@ function SpeciesPicker({
   value: Species;
   onChange: (s: Species) => void;
 }) {
+  const t = useT();
   return (
     <label className="block text-sm">
-      <span className="text-stone-600">Species</span>
+      <span className="text-stone-600">{t('logForm.species')}</span>
       <div className="mt-1 flex items-stretch gap-2">
         {/* Icon tile — same forest-50 background as the selected
             state of the old grid, so the visual language carries
@@ -584,7 +591,7 @@ function SpeciesPicker({
         >
           {speciesOptions.map((s) => (
             <option key={s} value={s}>
-              {s[0].toUpperCase() + s.slice(1)}
+              {t(`logForm.species.${s}` as TranslationKey)}
             </option>
           ))}
         </select>

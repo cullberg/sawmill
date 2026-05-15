@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react';
 import { makeDefaultPriority } from '../core/storage';
 import type { PlankSpec } from '../core/types';
+import { useT } from '../i18n/I18nProvider';
 
 interface Props {
   list: PlankSpec[];
-  strategy: 'priority' | 'value' | 'min-waste';
+  strategy: 'priority' | 'value' | 'min-waste' | 'min-cup';
   onChange: (list: PlankSpec[]) => void;
 }
 
 export function PriorityList({ list, strategy, onChange }: Props) {
+  const t = useT();
   const [dragId, setDragId] = useState<string | null>(null);
   const [hideDisabled, setHideDisabled] = useState(false);
 
@@ -46,11 +48,7 @@ export function PriorityList({ list, strategy, onChange }: Props) {
   };
   const enableAll = (v: boolean) => onChange(list.map((s) => ({ ...s, enabled: v })));
   const restoreDefaults = () => {
-    if (
-      window.confirm(
-        'Restore the default preferred-dimensions list? Your current customisations (order, enabled state, custom rows) will be replaced.'
-      )
-    ) {
+    if (window.confirm(t('priority.restoreDefaults.confirm'))) {
       onChange(makeDefaultPriority());
     }
   };
@@ -120,21 +118,25 @@ export function PriorityList({ list, strategy, onChange }: Props) {
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-stone-500">
-          Drag to reorder. Higher = higher priority. {enabledCount}/{list.length} enabled.
+          {t('priority.intro', {
+            enabled: enabledCount,
+            total: list.length
+          })}
         </span>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setHideDisabled((v) => !v)}
             className="px-2 py-1 text-xs text-stone-600 hover:text-forest-700 border border-stone-300 rounded-md"
-            title={hideDisabled ? 'Show all rows' : 'Hide disabled rows'}
           >
-            {hideDisabled ? `Show all (${list.length})` : `Hide disabled`}
+            {hideDisabled
+              ? t('priority.showAll', { n: list.length })
+              : t('priority.hideDisabled')}
           </button>
           <button
             onClick={add}
             className="px-2 py-1 text-sm bg-forest-500 text-white rounded-md hover:bg-forest-600"
           >
-            + Add
+            {t('priority.add')}
           </button>
         </div>
       </div>
@@ -142,16 +144,16 @@ export function PriorityList({ list, strategy, onChange }: Props) {
         <button
           onClick={restoreDefaults}
           className="hover:text-forest-700 underline"
-          title="Replace the list with the built-in default dimensions"
+          title={t('priority.restoreDefaults.title')}
         >
-          ↺ Restore defaults
+          {t('priority.restoreDefaults')}
         </button>
         <div className="flex gap-2">
           <button onClick={() => enableAll(true)} className="hover:text-forest-700 underline">
-            enable all
+            {t('priority.enableAll')}
           </button>
           <button onClick={() => enableAll(false)} className="hover:text-forest-700 underline">
-            none
+            {t('priority.enableNone')}
           </button>
         </div>
       </div>
@@ -190,7 +192,7 @@ export function PriorityList({ list, strategy, onChange }: Props) {
                 <button
                   onClick={() => moveVisible(i, -1)}
                   className="h-7 w-7 flex items-center justify-center text-stone-500 hover:text-forest-700 hover:bg-stone-100 rounded text-base"
-                  aria-label="Move up"
+                  aria-label={t('priority.moveUp')}
                   type="button"
                 >
                   ▲
@@ -201,7 +203,7 @@ export function PriorityList({ list, strategy, onChange }: Props) {
                 <button
                   onClick={() => moveVisible(i, 1)}
                   className="h-7 w-7 flex items-center justify-center text-stone-500 hover:text-forest-700 hover:bg-stone-100 rounded text-base"
-                  aria-label="Move down"
+                  aria-label={t('priority.moveDown')}
                   type="button"
                 >
                   ▼
@@ -212,27 +214,27 @@ export function PriorityList({ list, strategy, onChange }: Props) {
                 checked={spec.enabled}
                 onChange={(e) => update(spec.id, { enabled: e.target.checked })}
                 className="h-5 w-5 text-forest-500 rounded border-stone-300"
-                aria-label="Enabled"
+                aria-label={t('priority.enabled')}
               />
               <input
                 type="text"
                 value={spec.label ?? ''}
-                placeholder="label (optional)"
+                placeholder={t('priority.label.placeholder')}
                 onChange={(e) => update(spec.id, { label: e.target.value })}
                 className="flex-1 min-w-0 rounded-md border-stone-300 bg-white px-2 py-1.5 text-sm border"
               />
               {dup && (
                 <span
                   className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-800 border border-amber-300"
-                  title="Another row earlier in the list has the same thickness × width. The layout will treat them as interchangeable candidates — usually you want only one row per dimension."
+                  title={t('priority.dup.title')}
                 >
-                  dup
+                  {t('priority.dup.badge')}
                 </span>
               )}
               <button
                 onClick={() => remove(spec.id)}
                 className="h-8 w-8 flex items-center justify-center text-stone-400 hover:text-brand-600 hover:bg-stone-100 rounded text-sm"
-                aria-label="Remove"
+                aria-label={t('priority.remove')}
                 type="button"
               >
                 ✕
@@ -248,7 +250,7 @@ export function PriorityList({ list, strategy, onChange }: Props) {
                   spec and serves only as a "you typed something
                   meaningless" guard. */}
               <DimStepper
-                label="thickness (mm)"
+                label={t('priority.thickness')}
                 value={spec.thickness}
                 onChange={(v) => update(spec.id, { thickness: v })}
                 step={5}
@@ -256,7 +258,7 @@ export function PriorityList({ list, strategy, onChange }: Props) {
               />
               <span className="text-stone-400 text-lg font-semibold">×</span>
               <DimStepper
-                label="width (mm)"
+                label={t('priority.width')}
                 value={spec.width}
                 onChange={(v) => update(spec.id, { width: v })}
                 step={5}
@@ -264,9 +266,9 @@ export function PriorityList({ list, strategy, onChange }: Props) {
               />
               {strategy === 'value' && (
                 <>
-                  <span className="text-stone-400 text-sm ml-2">value</span>
+                  <span className="text-stone-400 text-sm ml-2">{t('priority.value.label')}</span>
                   <DimStepper
-                    label="value score"
+                    label={t('priority.value.score')}
                     value={spec.value ?? 0}
                     onChange={(v) => update(spec.id, { value: v })}
                     step={1}
@@ -280,7 +282,7 @@ export function PriorityList({ list, strategy, onChange }: Props) {
         })}
         {visible.length === 0 && (
           <li className="text-sm text-stone-400 italic py-4 text-center">
-            No entries visible. Toggle "Show all" to see disabled rows.
+            {t('priority.empty')}
           </li>
         )}
       </ul>
@@ -318,6 +320,7 @@ function DimStepper({
   step: number;
   min?: number;
 }) {
+  const t = useT();
   const btnCls =
     'shrink-0 h-10 w-10 flex items-center justify-center text-xl font-semibold bg-stone-100 hover:bg-stone-200 active:bg-stone-300 border border-stone-300 text-stone-700 disabled:text-stone-300 disabled:bg-stone-50 transition select-none';
 
@@ -334,7 +337,7 @@ function DimStepper({
         type="button"
         onClick={() => stepBy(-1)}
         disabled={decDisabled}
-        aria-label={`Decrease ${label} by ${step}`}
+        aria-label={t('priority.dec.aria', { label, step })}
         className={`${btnCls} rounded-l-md border-r-0`}
       >
         −
@@ -355,7 +358,7 @@ function DimStepper({
       <button
         type="button"
         onClick={() => stepBy(1)}
-        aria-label={`Increase ${label} by ${step}`}
+        aria-label={t('priority.inc.aria', { label, step })}
         className={`${btnCls} rounded-r-md border-l-0`}
       >
         +

@@ -38,3 +38,47 @@ export const BARK_THICKNESS_BY_SPECIES: Record<Species, number> = {
 export function barkThicknessForSpecies(species: Species): number {
   return BARK_THICKNESS_BY_SPECIES[species];
 }
+
+/**
+ * Tangential / radial shrinkage ratio per species — the dimensionless
+ * "cup factor" that drives how strongly a flat-sawn plank will cup
+ * during drying. Tangential shrinkage (along annual rings) is always
+ * larger than radial (perpendicular to rings); the ratio determines
+ * how much *differential* shrinkage there is between the two faces of
+ * a plank, which is what creates cup.
+ *
+ * A ratio of 1.0 would mean perfectly isotropic shrinkage and zero
+ * cup risk; real species range from ~1.6 (pine, mild) to ~2.2+
+ * (birch / aspen, severe). The values below are rule-of-thumb
+ * midpoints for typical sawmill-grade trunks, used by the
+ * `min-cup` strategy as a per-species cup-risk multiplier.
+ *
+ * Sources: standard wood-science handbooks (Forest Products
+ * Laboratory) generalised to a single number per species. Not
+ * research-grade; the strategy ranks layouts by *relative* cup
+ * risk so absolute calibration doesn't need to be exact.
+ */
+export const TANGENTIAL_RADIAL_RATIO: Record<Species, number> = {
+  // Conifers — pine and larch are the mildest, spruce / fir slightly
+  // more anisotropic but still moderate.
+  pine: 1.7,
+  larch: 1.7,
+  spruce: 1.9,
+  fir: 1.8,
+  // Hardwoods — birch and aspen cup hard, beech and alder are middling,
+  // oak surprisingly mild for a dense hardwood.
+  oak: 1.8,
+  beech: 2.0,
+  birch: 2.2,
+  aspen: 2.2,
+  alder: 1.9
+};
+
+/**
+ * Cup factor for a given species. Wraps the table above so callers
+ * have a typed accessor and a single chokepoint for any future
+ * refinement (e.g. moisture-content-aware adjustment).
+ */
+export function cupFactorForSpecies(species: Species): number {
+  return TANGENTIAL_RADIAL_RATIO[species];
+}

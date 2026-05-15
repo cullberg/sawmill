@@ -426,7 +426,8 @@ export function usePlan(options: UsePlanOptions = {}): UsePlan {
     const res = computeLayout({
       designDiameterMm: dd,
       settings: plan.settings,
-      priority: plan.priorityList
+      priority: plan.priorityList,
+      species: plan.log.species
     });
     if (firstRunRef.current) {
       firstRunRef.current = false;
@@ -463,6 +464,7 @@ export function usePlan(options: UsePlanOptions = {}): UsePlan {
     plan.log.supportInset,
     plan.log.length,
     plan.log.sweepMm,
+    plan.log.species,
     plan.settings.kerf,
     plan.settings.minSlab,
     plan.settings.edgeClearance,

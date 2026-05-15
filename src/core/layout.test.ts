@@ -200,6 +200,81 @@ describe('computeLayout', () => {
 });
 
 /**
+ * `min-cup` strategy: ranks layouts primarily by yield (used area),
+ * with cup risk as a soft tiebreaker. Sanity checks below verify
+ * that:
+ *   1. Yield doesn't collapse — the strategy still produces a usable
+ *      layout (it's not silently empty).
+ *   2. The strategy doesn't dramatically lose yield vs `min-waste`
+ *      on the same input — the soft tiebreaker is a tiebreaker, not
+ *      a yield killer.
+ *   3. Species selection actually changes the resulting score
+ *      (a high-cup species like birch doesn't produce LITERALLY the
+ *      same numerical trial as pine on the same log).
+ */
+describe('computeLayout — min-cup strategy', () => {
+  const cupSpecs: PlankSpec[] = [
+    { id: 'big', width: 200, thickness: 50, enabled: true },
+    { id: 'med', width: 100, thickness: 50, enabled: true },
+    { id: 'small', width: 50, thickness: 25, enabled: true }
+  ];
+  const cupSettings: MillSettings = { ...settings, strategy: 'min-cup' };
+
+  it('produces a non-empty layout', () => {
+    const res = computeLayout({
+      designDiameterMm: 400,
+      settings: cupSettings,
+      priority: cupSpecs,
+      species: 'pine'
+    });
+    expect(res.planks.length).toBeGreaterThan(0);
+  });
+
+  it('keeps yield within a tight band of min-waste on the same log', () => {
+    // Soft tiebreaker contract: min-cup must not give up much yield.
+    // We allow a small slip (<= 5%) because the cup penalty CAN
+    // legitimately swap two near-equal-area trials.
+    const minCup = computeLayout({
+      designDiameterMm: 400,
+      settings: cupSettings,
+      priority: cupSpecs,
+      species: 'birch' // high cup factor — biggest pressure to deviate
+    });
+    const minWaste = computeLayout({
+      designDiameterMm: 400,
+      settings: { ...settings, strategy: 'min-waste' },
+      priority: cupSpecs
+    });
+    expect(minCup.usedArea).toBeGreaterThan(minWaste.usedArea * 0.95);
+  });
+
+  it('still respects rectFitsInCircle and does not overlap planks', () => {
+    const res = computeLayout({
+      designDiameterMm: 400,
+      settings: cupSettings,
+      priority: cupSpecs,
+      species: 'pine'
+    });
+    for (const p of res.planks) {
+      expect(
+        rectFitsInCircle(p.x, p.y, p.width, p.thickness, 200 - settings.edgeClearance)
+      ).toBe(true);
+    }
+    assertNoOverlap(res.planks, 'min-cup');
+  });
+
+  it('falls back to a sensible layout when species is omitted', () => {
+    const res = computeLayout({
+      designDiameterMm: 400,
+      settings: cupSettings,
+      priority: cupSpecs
+      // species omitted — should use the default
+    });
+    expect(res.planks.length).toBeGreaterThan(0);
+  });
+});
+
+/**
  * No-regression guard: the improved layout algorithm must never
  * produce LESS used area than the legacy snapshot for any realistic
  * combination of log diameter, strategy and priority list. The

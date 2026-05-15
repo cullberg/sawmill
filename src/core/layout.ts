@@ -1,4 +1,5 @@
-import type { MillSettings, PlacedPlank, PlankSpec } from './types';
+import type { MillSettings, PlacedPlank, PlankSpec, Species } from './types';
+import { cupFactorForSpecies } from './species';
 
 /**
  * Build the user-facing label for a plank produced from a given spec.
@@ -36,11 +37,19 @@ function plankLabel(spec: PlankSpec): string {
  *   1. Pick a central cant spanning the pith. Which spec becomes the
  *      cant depends on the Mill strategy:
  *        - 'priority': the top-scoring spec whose larger side fits.
- *        - 'value' / 'min-waste': every enabled spec is trialled as a
- *          cant; the candidate whose whole-log layout scores best wins.
+ *        - 'value' / 'min-waste' / 'min-cup': every enabled spec is
+ *          trialled as a cant; the candidate whose whole-log layout
+ *          scores best wins.
  *   2. Fill a stack above and below the cant, greedy per slot, picking
  *      the best (spec, orientation) pair that still fits.
  *   3. Fill one side board per side (left / right) with its own stack.
+ *
+ * The 'min-cup' strategy is a quartersawn-friendly variant of
+ * 'min-waste': it ranks layouts by used area like 'min-waste', then
+ * uses a small per-plank cup-risk penalty (driven by distance from
+ * the pith, plank width / thickness, and the species' tangential /
+ * radial shrinkage ratio) plus a pith-zone penalty as a soft
+ * tiebreaker. So yield comes first, cup-resistance breaks ties.
  *
  * The layout is purely geometric; the sawyer then chooses the physical
  * order of cuts at runtime via the Rotate + Step controls.
@@ -63,6 +72,14 @@ export interface LayoutInput {
   designDiameterMm: number;
   settings: MillSettings;
   priority: PlankSpec[];
+  /**
+   * Log species — only consulted by the `min-cup` strategy, which
+   * weights its cup-risk score by the species-specific tangential /
+   * radial shrinkage ratio. Other strategies ignore this field.
+   * Optional with a `pine` default so callers (and existing tests)
+   * that don't yet supply it keep working.
+   */
+  species?: Species;
 }
 
 export interface LayoutResult {
@@ -108,7 +125,7 @@ export function rectFitsInCircle(
  * thickness×width); the slot-filler chooses whichever fits best.
  */
 export function computeLayout(input: LayoutInput): LayoutResult {
-  const { designDiameterMm, settings, priority } = input;
+  const { designDiameterMm, settings, priority, species = 'pine' } = input;
   // Planks must stay inside the usable wood: design radius minus bark minus
   // edge clearance (wane avoidance).
   const r = designDiameterMm / 2 - settings.edgeClearance - settings.barkThickness;
@@ -123,9 +140,85 @@ export function computeLayout(input: LayoutInput): LayoutResult {
   const maxCountOf = (spec: PlankSpec) => spec.maxCount ?? Number.POSITIVE_INFINITY;
 
   /**
-   * Strategy-specific score for a spec. Orientation is handled by the
-   * caller (see the slot-filler), because for 'min-waste' the slot's
-   * actual plank area matters more than the spec's nominal area.
+   * Per-plank cup-risk score (used by `min-cup` strategy).
+   *
+   * Drying cup is driven by the difference between tangential and
+   * radial shrinkage in a plank's wide face. Two factors dominate:
+   *
+   *   1. **Distance from the pith** (`d`). A plank centred on the
+   *      pith has its wide face running radially → quartersawn →
+   *      negligible cup. A plank far from the pith has its wide face
+   *      tangent to the rings → flat-sawn → strong cup. Risk grows
+   *      ~linearly with `d`.
+   *
+   *   2. **Width** (`w`). Cup magnitude scales with the differential
+   *      shrinkage spanning the plank's wide face. A wide flat-sawn
+   *      plank cups noticeably more than a narrow one of the same
+   *      thickness; risk grows ~quadratically with `w` (cup is
+   *      roughly proportional to width × differential shrinkage,
+   *      and visible cup magnitude scales with width again because
+   *      of geometry).
+   *
+   *   3. **Thickness** (`t`). Thick planks resist cupping mechanically.
+   *      Risk shrinks ~linearly with `t`.
+   *
+   *   4. **Species cup factor** (~tangential/radial ratio). Birch
+   *      and aspen cup harder than pine for the same geometry.
+   *
+   * Combined formula:
+   *
+   *     cupRisk = (w² · d) / t · (cupFactor − 1)
+   *
+   * The (cupFactor − 1) term collapses isotropic species (ratio = 1)
+   * to zero risk, which is the geometrically correct limit.
+   *
+   * Returned as a non-negative number; lower is better. Units are
+   * arbitrary — the strategy ranks layouts by *relative* risk.
+   */
+  const cupFactor = cupFactorForSpecies(species);
+  const cupRisk = (w: number, t: number, dFromPith: number): number => {
+    if (t <= 0) return 0;
+    return ((w * w) * dFromPith * (cupFactor - 1)) / t;
+  };
+
+  /**
+   * Pith-zone penalty (used by `min-cup` strategy).
+   *
+   * The pith centre is unstable wood — juvenile, often containing
+   * pith checks and reaction wood — so a sawyer pursuing a cup-
+   * minimising layout typically also wants to AVOID placing a plank
+   * directly across the pith (geometrically tempting because the
+   * cant is naturally quartersawn, but practically risky for any
+   * plank meant to stay flat in service).
+   *
+   * Penalty kicks in when a plank's bounding box covers the pith
+   * (i.e. (0,0) is inside the plank rectangle), and scales with how
+   * "central" the plank is — a plank exactly centred on the pith
+   * gets the full penalty; one whose edge just grazes the pith gets
+   * almost none. The penalty units are chosen to be the same order
+   * of magnitude as `cupRisk` for typical (w, t, d) values so it
+   * naturally combines into the total `min-cup` score.
+   */
+  const PITH_RADIUS_MM = 25; // ≈ 50 mm Ø juvenile-wood zone, conservative
+  const pithPenalty = (cx: number, cy: number, w: number, t: number): number => {
+    const hx = w / 2;
+    const hy = t / 2;
+    const coversPith =
+      Math.abs(cx) < hx + EPS && Math.abs(cy) < hy + EPS;
+    if (!coversPith) return 0;
+    // How deep into the plank the pith sits, normalised to the
+    // half-extents. 1.0 = pith dead-centre, 0.0 = pith on the edge.
+    const fx = 1 - Math.abs(cx) / hx;
+    const fy = 1 - Math.abs(cy) / hy;
+    const centrality = Math.min(fx, fy);
+    return PITH_RADIUS_MM * w * t * centrality * (cupFactor - 1);
+  };
+
+  /**
+   * Strategy-specific score for a candidate (spec, orientation, position).
+   * Orientation is handled by the caller (see the slot-filler), because
+   * for 'min-waste' the slot's actual plank area matters more than the
+   * spec's nominal area.
    *
    * 'priority': tier number × 1e6 dominates everything. No area
    * tiebreaker — specs are unique in the priority list so the
@@ -142,8 +235,24 @@ export function computeLayout(input: LayoutInput): LayoutResult {
    *
    * 'min-waste': raw area. Biggest plank wins; ties broken downstream
    * by the slot-filler's orientation preference.
+   *
+   * 'min-cup': area minus a small cup-risk penalty. The "softer
+   * tiebreaker over total area" interpretation: yield comes first,
+   * cup-resistance breaks ties between near-equal-area candidates,
+   * and pith-crossing planks are quietly demoted. Implemented as
+   * `area − ε · (cupRisk + pithPenalty)` with ε small enough that
+   * a meaningfully bigger plank always wins on raw area, but two
+   * specs with similar area diverge on cup risk.
    */
-  const scoreSpec = (spec: PlankSpec, counts: Record<string, number>): number => {
+  const CUP_TIEBREAK_EPS = 1e-3;
+  const scoreSpec = (
+    spec: PlankSpec,
+    counts: Record<string, number>,
+    cx: number,
+    cy: number,
+    w: number,
+    h: number
+  ): number => {
     switch (settings.strategy) {
       case 'value': {
         const raw = spec.value ?? spec.width * spec.thickness;
@@ -151,6 +260,13 @@ export function computeLayout(input: LayoutInput): LayoutResult {
       }
       case 'min-waste':
         return spec.width * spec.thickness;
+      case 'min-cup': {
+        const area = w * h;
+        // Distance from pith of the plank centre.
+        const dFromPith = Math.hypot(cx, cy);
+        const risk = cupRisk(w, h, dFromPith) + pithPenalty(cx, cy, w, h);
+        return area - CUP_TIEBREAK_EPS * risk;
+      }
       case 'priority':
       default:
         return (specs.length - specs.indexOf(spec)) * 1e6;
@@ -216,8 +332,9 @@ export function computeLayout(input: LayoutInput): LayoutResult {
           if (xHalfLimit !== null && w / 2 > xHalfLimit + EPS) continue;
           const rectBottom = direction === 1 ? y : y - h;
           const rectTop = rectBottom + h;
-          if (!rectFitsInCircle(cx, (rectBottom + rectTop) / 2, w, h, r)) continue;
-          candidates.push({ spec, w, h, score: scoreSpec(spec, counts) });
+          const cy = (rectBottom + rectTop) / 2;
+          if (!rectFitsInCircle(cx, cy, w, h, r)) continue;
+          candidates.push({ spec, w, h, score: scoreSpec(spec, counts, cx, cy, w, h) });
         }
       }
       if (candidates.length === 0) break;
@@ -289,7 +406,7 @@ export function computeLayout(input: LayoutInput): LayoutResult {
         if (w > corridorWidth + EPS) continue;
         const cx = sign * (xInner + w / 2);
         if (!rectFitsInCircle(cx, 0, w, h, r)) continue;
-        candidates.push({ spec, w, h, score: scoreSpec(spec, counts) });
+        candidates.push({ spec, w, h, score: scoreSpec(spec, counts, cx, 0, w, h) });
       }
     }
     if (candidates.length === 0) return sequence;
@@ -396,10 +513,15 @@ export function computeLayout(input: LayoutInput): LayoutResult {
    *    orientation if possible. The user ranked specs on purpose;
    *    strict-priority must honour that. Still upgrades to
    *    orientation-aware slot-filling downstream.
-   *  - 'value' / 'min-waste': trial every candidate cant, keep the
-   *    layout whose TOTAL score is highest (value for 'value',
-   *    usedArea for 'min-waste'). This is the "try multiple cants"
-   *    improvement.
+   *  - 'value' / 'min-waste' / 'min-cup': trial every candidate
+   *    cant, keep the layout whose TOTAL score is highest. For
+   *    'min-cup' the trial score is `usedArea − ε · totalCupRisk`,
+   *    so yield (area) leads and cup risk only breaks ties between
+   *    near-equal-area trials. This matches the "softer tiebreaker
+   *    over total area" interpretation: we don't sacrifice a sliver
+   *    of yield to dodge a tiny bit of cup, but for two layouts
+   *    that produce equally much wood we pick the more cup-resistant
+   *    one.
    */
   let winner: Trial;
   if (settings.strategy === 'priority') {
@@ -420,6 +542,22 @@ export function computeLayout(input: LayoutInput): LayoutResult {
           total += spec.value ?? p.width * p.thickness;
         }
         return total;
+      }
+      if (settings.strategy === 'min-cup') {
+        // Soft tiebreaker over area: total used area, minus a small
+        // fraction of the total cup risk (per-plank cup + pith
+        // penalty summed across the layout). The same epsilon that
+        // governs per-slot scoring also governs trial scoring so a
+        // sawyer can reason about both with one mental model.
+        let area = 0;
+        let risk = 0;
+        for (const p of t.planks) {
+          area += p.width * p.thickness;
+          const dFromPith = Math.hypot(p.x, p.y);
+          risk += cupRisk(p.width, p.thickness, dFromPith);
+          risk += pithPenalty(p.x, p.y, p.width, p.thickness);
+        }
+        return area - CUP_TIEBREAK_EPS * risk;
       }
       // 'min-waste' → usedArea
       return t.planks.reduce((acc, p) => acc + p.width * p.thickness, 0);
