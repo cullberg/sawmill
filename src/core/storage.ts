@@ -113,7 +113,14 @@ export const defaultPriority: PlankSpec[] = DEFAULT_PRIORITY.map(({ t, w, enable
   width: w,
   thickness: t,
   enabled,
-  label: `${t}×${w}`
+  // Match the canonical "width×thickness" form that `layout.ts`
+  // builds for every produced plank, so the seed label the user
+  // sees in the priority-list text input matches what'll appear
+  // on the produced plank in the end-view. (Earlier versions
+  // stored "${t}×${w}" here, which read consistently in the
+  // priority list but flipped order on the cut planks — confusing
+  // for sawyers comparing the two views side-by-side.)
+  label: `${w}×${t}`
 }));
 
 /**
@@ -127,7 +134,7 @@ export function makeDefaultPriority(): PlankSpec[] {
     width: w,
     thickness: t,
     enabled,
-    label: `${t}×${w}`
+    label: `${w}×${t}`
   }));
 }
 

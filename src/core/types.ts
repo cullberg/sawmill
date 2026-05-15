@@ -1,7 +1,27 @@
 // Core types for the sawmill planner.
 // All length/size values are in millimetres unless stated otherwise.
 
-export type Species = 'pine' | 'spruce' | 'birch';
+/**
+ * Species the planner ships with as built-in presets. The list is
+ * deliberately broader than just the original three Nordic conifers
+ * so a sawyer running e.g. a backyard hardwood mill can still pick
+ * a sensible bark default. Adding a new species means:
+ *   1. Append it here.
+ *   2. Add a bark thickness in `core/species.ts`.
+ *   3. Add an icon case in `LogForm.tsx → SpeciesIcon`.
+ * All three places are guarded by the `Species` literal union so the
+ * type checker complains until the new species is wired everywhere.
+ */
+export type Species =
+  | 'pine'
+  | 'spruce'
+  | 'fir'
+  | 'larch'
+  | 'birch'
+  | 'aspen'
+  | 'alder'
+  | 'oak'
+  | 'beech';
 
 export interface LogInput {
   /**
@@ -24,6 +44,22 @@ export interface LogInput {
   length: number;
   /** Species (used for presets only). */
   species: Species;
+  /**
+   * Worst-case sweep (curvature) offset of the log, mm. This is the
+   * maximum perpendicular distance between the bark/pith of the log and
+   * the straight chord drawn between its two ends — i.e. how far the
+   * log bows out from a straight line, measured at its worst point.
+   *
+   * Sawyers typically eyeball this with a string line stretched between
+   * the two ends, then measure the gap to the bark at midspan.
+   *
+   * Optional / undefined means "no sweep entered" — treated as a
+   * perfectly straight log (sweep = 0). The taper math reduces the
+   * effective design diameter by 2·sweep so a full-length plank is
+   * still guaranteed to clear the bark even on the concave side of
+   * the curve, where the pith deviates from the chord by up to sweep.
+   */
+  sweepMm?: number;
 }
 
 export interface MillSettings {

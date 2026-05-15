@@ -46,14 +46,36 @@ export function topEndDiameter(log: LogInput): number {
 }
 
 /**
+ * Worst-case sweep offset of the log, mm. Reads `LogInput.sweepMm`
+ * with a 0 default so older saved plans (and tests) that don't carry
+ * the field are treated as perfectly straight logs.
+ *
+ * Clamped to be non-negative — a negative sweep would make
+ * `designDiameter` grow above the smaller end circle, which is never
+ * physically meaningful.
+ */
+export function sweepMm(log: LogInput): number {
+  return Math.max(0, log.sweepMm ?? 0);
+}
+
+/**
  * The smallest diameter that the mill can rely on for planks that must run
  * the full length of the log. For a tapered log this is the diameter at the
- * far end (top end).
+ * far end (top end). For a curved log we additionally subtract 2·sweep:
+ * the pith deviates from the chord between the two ends by up to `sweep`
+ * mm at the worst point, so on the concave side of the bow a full-length
+ * plank loses `sweep` of clearance — and the same on the convex side
+ * relative to the design circle, totalling 2·sweep diameter loss.
+ *
+ * Clamped to >= 0 so an absurd sweep input can't drive the design
+ * diameter negative; downstream layout will simply produce no planks
+ * if the effective circle is too small.
  */
 export function designDiameter(log: LogInput): number {
   const a = rootEndDiameter(log);
   const b = topEndDiameter(log);
-  return Math.min(a, b);
+  const straightMin = Math.min(a, b);
+  return Math.max(0, straightMin - 2 * sweepMm(log));
 }
 
 /**

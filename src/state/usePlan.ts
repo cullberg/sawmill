@@ -462,6 +462,7 @@ export function usePlan(options: UsePlanOptions = {}): UsePlan {
     plan.log.topSideDiameter,
     plan.log.supportInset,
     plan.log.length,
+    plan.log.sweepMm,
     plan.settings.kerf,
     plan.settings.minSlab,
     plan.settings.edgeClearance,

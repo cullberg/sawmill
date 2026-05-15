@@ -198,7 +198,13 @@ export default function App() {
             defaultOpen={defaultOpen}
             accent="wood"
           >
-            <LogForm log={plan.log} onChange={setLog} onDone={onLogMeasurementsDone} />
+            <LogForm
+              log={plan.log}
+              onChange={setLog}
+              settings={plan.settings}
+              onSettingsChange={setSettings}
+              onDone={onLogMeasurementsDone}
+            />
           </Collapsible>
           {/* The log report is useful but not essential mid-cut — tuck it
               behind a collapsible on every viewport so it never steals focus

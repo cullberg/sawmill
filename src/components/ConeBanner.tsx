@@ -1,4 +1,4 @@
-import { rootEndDiameter, topEndDiameter } from '../core/taper';
+import { rootEndDiameter, sweepMm, topEndDiameter } from '../core/taper';
 import type { LogInput } from '../core/types';
 import type { ConeState } from '../state/usePlan';
 
@@ -147,8 +147,12 @@ function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
   // All downstream sizes (logPath, support blocks, drop arrow, pith
   // stroke) derive from W / H / mmPerPx / rMax so tuning those four
   // numbers alone scales the whole schematic uniformly.
+  //
+  // Width is fixed; height grows to make room for the bow when sweep
+  // is present, so a horns-up arch never clips against the top edge
+  // of the SVG. The headroom is computed below from the same
+  // exaggeration factor used to draw the bow.
   const W = 160;
-  const H = 40;
 
   // Log axis runs across the figure with a small margin on each side.
   const xMargin = 4;
@@ -178,6 +182,25 @@ function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
   const scale = Math.min(1, rMax / Math.max(...raw));
   const [rRootEnd, rTopEnd, rRootSup, rTopSup] = raw.map((r) => Math.max(rMin, r * scale));
 
+  // Curvature offset in figure space. Scaled by the same factor as the
+  // diameters so a sawyer who reads "30 mm sweep on a 400 mm log" can
+  // see roughly correct proportions: the bow is small relative to the
+  // log's thickness but large enough to be visible. Sweep is the
+  // perpendicular offset between the pith and the chord at midspan;
+  // we render that as a quadratic bow in the side view (peak at the
+  // halfway point) which is a fair approximation of a circular-arc
+  // sweep at small offsets.
+  const sweepFigPx = sweepMm(log) * mmPerPx * scale;
+  // Bow exaggeration — see the longer comment near `bowFactor`. We
+  // compute it here so it can also size the SVG headroom.
+  const bowExaggeration = 1.6;
+  const sweepDrawPx = sweepFigPx * bowExaggeration;
+
+  // Figure height: 40 px is the straight-log baseline, plus headroom
+  // for the bow apex so a horns-up arch never clips the top edge of
+  // the SVG when sweep is large.
+  const H = 40 + Math.ceil(sweepDrawPx);
+
   // Supports share one y baseline in both active and noDrop variants:
   // the sawyer hasn't yet dropped the root support, so the two tips
   // are level. The pith is then forced to slope down-to-the-right
@@ -192,24 +215,85 @@ function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
   const yPithRootSup = ySupportTip - rRootSup;
   const yPithTopSup = ySupportTip - rTopSup;
 
-  // Linearly extrapolate the pith to the two log ends so the
-  // silhouette spans the full log length.
+  // Linearly extrapolate the pith chord to the two log ends so the
+  // straight-log silhouette spans the full log length. With sweep
+  // present, this line is the chord between the SUPPORT POINTS and
+  // the actual pith bows AWAY from it. The bow is anchored at the
+  // two supports (zero offset there) so the log is shown physically
+  // resting on its supports — the ends overhanging past the supports
+  // continue the same parabola and droop slightly below the chord,
+  // which matches reality for a horns-up log on two supports.
   const pithSlope = (yPithTopSup - yPithRootSup) / (xTopSup - xRootSup);
-  const pithAt = (x: number): number => yPithRootSup + pithSlope * (x - xRootSup);
-  const yPithLogRoot = pithAt(xLogRoot);
-  const yPithLogTop = pithAt(xLogTop);
+  const chordAt = (x: number): number => yPithRootSup + pithSlope * (x - xRootSup);
+
+  // Horns-up bow factor:
+  //   - 0 at xRootSup and xTopSup (log touches each support)
+  //   - 1 at the midpoint between the supports (apex of the bow)
+  //   - slightly negative past the supports (ends droop below the chord)
+  // SVG y grows downward, so "up on screen" means smaller y; the bow
+  // is subtracted from the chord so a positive bow factor lifts the
+  // pith upward = horns up.
+  //
+  // The shape is a parabola through (xRootSup, 0), (xTopSup, 0) with
+  // peak 1 at the midpoint: bow(x) = 1 − ((2(x − xMid) / span))².
+  // Past the supports this naturally goes negative; we clamp the
+  // negative tail to −0.4 so the overhanging ends droop a little but
+  // don't dive off the bottom of the figure for short support spans.
+  //
+  // We additionally apply a 1.6× visibility exaggeration (see
+  // `sweepDrawPx` above): small numerical sweep values (a few mm)
+  // only translate to ~2 px of bow at this figure scale, which is
+  // too subtle to read. The exaggeration is a schematic license —
+  // same kind of license the diameter scaling already uses
+  // (mmPerPx = 0.085) — so the curvature reads at a glance. The
+  // taper math elsewhere in the app remains unscaled.
+  const xMidSup = (xRootSup + xTopSup) / 2;
+  const halfSpanSup = Math.max(1, (xTopSup - xRootSup) / 2);
+  const bowFactor = (x: number): number => {
+    const u = (x - xMidSup) / halfSpanSup;
+    return Math.max(-0.4, 1 - u * u);
+  };
+  const pithAt = (x: number): number => chordAt(x) - sweepDrawPx * bowFactor(x);
+
+  // For taper, linearly interpolate the half-diameter along the chord
+  // independent of the bow — radius is along-axis so it doesn't change
+  // when the log bends. Endpoints: rRootEnd at xLogRoot, rTopEnd at
+  // xLogTop.
+  const rAt = (x: number): number => {
+    const t = (x - xLogRoot) / Math.max(1, xLogTop - xLogRoot);
+    return rRootEnd + (rTopEnd - rRootEnd) * t;
+  };
 
   const accent = variant === 'active' ? '#b45309' : '#78716c';
   const axisColor = accent;
 
-  // Log silhouette (four points of the trapezoid, walking CW in SVG):
-  // top-root → top-top → bottom-top → bottom-root.
-  const logPath =
-    `M ${xLogRoot} ${yPithLogRoot - rRootEnd}` +
-    ` L ${xLogTop} ${yPithLogTop - rTopEnd}` +
-    ` L ${xLogTop} ${yPithLogTop + rTopEnd}` +
-    ` L ${xLogRoot} ${yPithLogRoot + rRootEnd}` +
-    ' Z';
+  // Log silhouette. For a straight log we'd draw a 4-point trapezoid;
+  // for a curved log we sample top AND bottom edges along the pith bow
+  // so the curvature is visible on both sides — a real horns-up log
+  // viewed from the side has a curved bottom too, it's just lifted
+  // off any surface between the two support points. Sampling 9 points
+  // keeps the path light while still rendering a smooth curve. When
+  // sweep = 0 the bow term is zero and the silhouette collapses to
+  // the same trapezoid the figure used to draw before sweep handling
+  // existed.
+  //
+  // The bow factor is zero at xRootSup and xTopSup (see `bowFactor`
+  // above), so the bottom edge automatically touches each support
+  // tip at its support x-position regardless of curvature — i.e. the
+  // log visibly rests on its supports while still curving away from
+  // them between the contact points. This is the geometrically true
+  // rendering for a horns-up log on two trestles.
+  const samples = 9;
+  const xs: number[] = [];
+  for (let i = 0; i < samples; i++) {
+    xs.push(xLogRoot + ((xLogTop - xLogRoot) * i) / (samples - 1));
+  }
+  const topEdge = xs.map((x) => `${x.toFixed(2)} ${(pithAt(x) - rAt(x)).toFixed(2)}`);
+  const botEdge = xs
+    .slice()
+    .reverse()
+    .map((x) => `${x.toFixed(2)} ${(pithAt(x) + rAt(x)).toFixed(2)}`);
+  const logPath = `M ${topEdge.join(' L ')} L ${botEdge.join(' L ')} Z`;
 
   const supportHalf = 5;
   const supportPath = (x: number, yTip: number): string =>
@@ -230,8 +314,12 @@ function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
       role="img"
       aria-label={
         variant === 'noDrop'
-          ? 'Log on supports, both ends equal'
-          : `Log on supports, lower root by ${rootDropMm.toFixed(0)} millimetres`
+          ? sweepMm(log) > 0
+            ? 'Curved log on supports, both ends equal'
+            : 'Log on supports, both ends equal'
+          : sweepMm(log) > 0
+            ? `Curved log on supports, lower root by ${rootDropMm.toFixed(0)} millimetres`
+            : `Log on supports, lower root by ${rootDropMm.toFixed(0)} millimetres`
       }
       className="flex-none"
     >
@@ -244,12 +332,11 @@ function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
         strokeLinejoin="round"
       />
       {/* Pith axis — spans the full log length, dashed; slope encodes
-          whether the log is tilted. */}
-      <line
-        x1={xLogRoot}
-        y1={yPithLogRoot}
-        x2={xLogTop}
-        y2={yPithLogTop}
+          whether the log is tilted, and the bow encodes sweep. For
+          straight logs (sweep = 0) the path collapses to a line. */}
+      <path
+        d={`M ${xs.map((x) => `${x.toFixed(2)} ${pithAt(x).toFixed(2)}`).join(' L ')}`}
+        fill="none"
         stroke={axisColor}
         strokeWidth={1.1}
         strokeDasharray="3 2"

@@ -174,6 +174,29 @@ describe('computeLayout', () => {
     const hadOverlap = hasOverlap(resLegacy.planks);
     expect(hadOverlap).toBe(true);
   });
+
+  /**
+   * Regression coverage for the user-typed label flow. Layout used to
+   * always overwrite the produced plank's `label` with a synthesised
+   * "${width}×${thickness}" string, which silently discarded any
+   * label the sawyer typed in PriorityList. The fix routes labels
+   * through a `plankLabel` helper that prefers `spec.label` when
+   * present.
+   */
+  it('uses the spec label when the user has typed one', () => {
+    const labelled: PlankSpec[] = [
+      { id: 'a', width: 150, thickness: 50, enabled: true, label: 'decking' },
+      { id: 'b', width: 100, thickness: 25, enabled: true, label: '  ' }, // whitespace → ignore
+      { id: 'c', width: 50, thickness: 25, enabled: true } // no label → fallback
+    ];
+    const res = computeLayout({ designDiameterMm: 300, settings, priority: labelled });
+    const a = res.planks.find((p) => p.specId === 'a');
+    const b = res.planks.find((p) => p.specId === 'b');
+    const c = res.planks.find((p) => p.specId === 'c');
+    if (a) expect(a.label).toBe('decking');
+    if (b) expect(b.label).toBe('100×25');
+    if (c) expect(c.label).toBe('50×25');
+  });
 });
 
 /**

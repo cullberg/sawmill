@@ -6,6 +6,7 @@ import {
   diameterAt,
   logVolumeM3,
   supportGap,
+  sweepMm,
   taperPerMetre,
   topEndDiameter
 } from './taper';
@@ -78,5 +79,42 @@ describe('taper math', () => {
     // Cylinder ≈ π·0.1875²·5 ≈ 0.552 m³; frustum should be close.
     expect(v).toBeGreaterThan(0.4);
     expect(v).toBeLessThan(0.7);
+  });
+
+  it('treats a missing sweep field as a perfectly straight log', () => {
+    // sweepMm helper falls back to 0 so existing saved plans (which
+    // never had the field) keep their old design-diameter behaviour.
+    expect(sweepMm(sample)).toBe(0);
+    expect(designDiameter(sample)).toBeCloseTo(325, 6);
+  });
+
+  it('clamps a negative sweep to zero', () => {
+    const wonky: LogInput = { ...sample, sweepMm: -5 };
+    expect(sweepMm(wonky)).toBe(0);
+    expect(designDiameter(wonky)).toBeCloseTo(325, 6);
+  });
+
+  it('shrinks the design diameter by 2× sweep on a curved log', () => {
+    // 30 mm of sweep ⇒ design Ø drops from 325 to 325 − 60 = 265 mm.
+    const bowed: LogInput = { ...sample, sweepMm: 30 };
+    expect(designDiameter(bowed)).toBeCloseTo(265, 6);
+  });
+
+  it('clamps the design diameter to zero if sweep exceeds half the smaller end Ø', () => {
+    // 200 mm of sweep on a 325 mm top Ø would mathematically take the
+    // design diameter negative; physically that's just "no full-length
+    // plank fits", which we represent as 0.
+    const absurd: LogInput = { ...sample, sweepMm: 200 };
+    expect(designDiameter(absurd)).toBe(0);
+  });
+
+  it('does not affect taper, end diameters, or root-lowering', () => {
+    // Sweep is independent of the cone math: it changes the design
+    // circle but not the diameter readings or the support-shim drop.
+    const bowed: LogInput = { ...sample, sweepMm: 30 };
+    expect(rootEndDiameter(bowed)).toBeCloseTo(425, 6);
+    expect(topEndDiameter(bowed)).toBeCloseTo(325, 6);
+    expect(rootLowering(bowed)).toBeCloseTo(25, 6);
+    expect(taperPerMetre(bowed)).toBeCloseTo(20, 6);
   });
 });

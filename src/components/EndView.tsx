@@ -1,4 +1,4 @@
-import { rootEndDiameter, designDiameter } from '../core/taper';
+import { rootEndDiameter, designDiameter, sweepMm, topEndDiameter } from '../core/taper';
 import { toolName } from '../core/tool';
 import { computePlankTrim, edgingPlanForPlank } from '../core/trim';
 import type { PlacedPlank, PlanState, ProducedPlank, Vec2 } from '../core/types';
@@ -26,6 +26,14 @@ interface Props {
 export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
   const dTop = designDiameter(plan.log);
   const dRoot = rootEndDiameter(plan.log);
+  // Straight-log design diameter — what `designDiameter` would return
+  // if there were no sweep. Used as a faded "what you'd get on a
+  // straight log" reference circle so the sawyer can SEE how much
+  // sweep is costing them in usable diameter. Equals dTop when sweep
+  // is zero, in which case the straight reference and the design
+  // circle coincide and we skip drawing the duplicate.
+  const dStraight = Math.min(rootEndDiameter(plan.log), topEndDiameter(plan.log));
+  const sweep = sweepMm(plan.log);
   const maxD = Math.max(dTop, dRoot);
   const pad = 36;
   const scale = (size - pad * 2) / maxD;
@@ -34,6 +42,7 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
   const cy = size / 2;
   const rRoot = (dRoot / 2) * scale;
   const rTop = (dTop / 2) * scale;
+  const rStraight = (dStraight / 2) * scale;
   const bark = plan.settings.barkThickness * scale;
   const kerfPx = plan.settings.kerf * scale;
 
@@ -156,6 +165,61 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
           strokeWidth={1.2}
           opacity={0.45}
         />
+        {/* Straight-log design diameter — only drawn when the log has
+            sweep. This is what the design circle would have been on a
+            straight log; the actual (curve-shrunk) design circle is
+            drawn smaller, just below. The annulus between the two
+            circles is the diameter the curve costs us, and we tint it
+            faintly red so the sawyer can see at a glance how much
+            cylinder the bow is eating. Coincides with the design
+            circle when sweep = 0 (and is suppressed in that case to
+            avoid a confusing double-dashed circle). */}
+        {sweep > 0 && rStraight > rTop + 0.5 && (
+          <>
+            <circle
+              cx={cx}
+              cy={cy}
+              r={rStraight}
+              fill="#fee2e2"
+              stroke="#c01d10"
+              strokeWidth={1}
+              strokeDasharray="3 3"
+              opacity={0.35}
+            />
+            {/* Small red label in the top-left of the SVG explaining
+                the annulus, mirrored on the right side as a "−Nmm Ø"
+                callout so the cost shows up as a number, not just a
+                visual. Placed inside the padded margin so it doesn't
+                collide with planks even when the log fills the
+                canvas. */}
+            <text
+              x={pad / 2 + 2}
+              y={pad / 2 + 2}
+              fontSize={11}
+              fontWeight={600}
+              fill="#c01d10"
+              stroke="#ffffff"
+              strokeWidth={2.5}
+              dominantBaseline="hanging"
+              style={{ paintOrder: 'stroke' }}
+            >
+              sweep {sweep.toFixed(0)} mm
+            </text>
+            <text
+              x={pad / 2 + 2}
+              y={pad / 2 + 16}
+              fontSize={10}
+              fontWeight={500}
+              fill="#c01d10"
+              stroke="#ffffff"
+              strokeWidth={2.5}
+              dominantBaseline="hanging"
+              style={{ paintOrder: 'stroke' }}
+            >
+              −{(2 * sweep).toFixed(0)} mm Ø
+            </text>
+          </>
+        )}
         {/* Design diameter reference circle (dashed) */}
         <circle
           cx={cx}
@@ -788,6 +852,24 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
           />
           bed
         </span>
+        {/* Sweep swatch — only shown when the log is curved, so a
+            straight-log session keeps the legend tight. The colour
+            and dashed style match the faded red ring drawn in the
+            SVG above. */}
+        {sweep > 0 && (
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="inline-block w-3 h-3 rounded-full"
+              style={{
+                backgroundColor: '#fee2e2',
+                border: '1px dashed #c01d10',
+                opacity: 0.7
+              }}
+              aria-hidden
+            />
+            sweep cost ({(2 * sweep).toFixed(0)} mm Ø)
+          </span>
+        )}
       </div>
     </div>
   );

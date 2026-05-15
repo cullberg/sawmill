@@ -1,6 +1,31 @@
 import type { MillSettings, PlacedPlank, PlankSpec } from './types';
 
 /**
+ * Build the user-facing label for a plank produced from a given spec.
+ * Prefers the spec's `label` when the user has typed one, falling back
+ * to the canonical "width×thickness" form used by `layout.ts` (and
+ * therefore visible on every produced plank in the end-view today).
+ * This is the single chokepoint that makes user-typed labels actually
+ * flow through to the produced planks; without it, layout would
+ * always overwrite the label with the geometric form, leaving the
+ * label text input in `PriorityList` purely cosmetic.
+ *
+ * Whitespace-only labels are treated as "not set" so a sawyer who
+ * accidentally tabs a space in doesn't get blank labels in the
+ * end-view illustration. (Note: the seed labels in `storage.ts`
+ * happen to read "thickness×width" — the opposite order — but that
+ * cosmetic mismatch is older than this helper and keeping the seed
+ * labels untouched avoids forcing every existing saved plan to
+ * re-render with new strings.)
+ */
+function plankLabel(spec: PlankSpec): string {
+  const trimmed = spec.label?.trim();
+  return trimmed && trimmed.length > 0
+    ? trimmed
+    : `${spec.width}×${spec.thickness}`;
+}
+
+/**
  * Geometry helpers and the auto-layout algorithm.
  *
  * The log cross-section is treated as a circle of the DESIGN diameter
@@ -220,7 +245,7 @@ export function computeLayout(input: LayoutInput): LayoutResult {
         width: pick.w,
         thickness: pick.h,
         sequence: seq,
-        label: `${pick.spec.width}×${pick.spec.thickness}`
+        label: plankLabel(pick.spec)
       });
       counts[pick.spec.id] = (counts[pick.spec.id] ?? 0) + 1;
       y = direction === 1 ? rectTop + kerf : rectBottom - kerf;
@@ -287,7 +312,7 @@ export function computeLayout(input: LayoutInput): LayoutResult {
       width: pick.w,
       thickness: pick.h,
       sequence,
-      label: `${pick.spec.width}×${pick.spec.thickness}`
+      label: plankLabel(pick.spec)
     });
     counts[pick.spec.id] = (counts[pick.spec.id] ?? 0) + 1;
     const sideHalf = pick.w / 2;
@@ -311,7 +336,7 @@ export function computeLayout(input: LayoutInput): LayoutResult {
       width: cantSize.w,
       thickness: cantSize.h,
       sequence: 1,
-      label: `${cantSpec.width}×${cantSpec.thickness}`
+      label: plankLabel(cantSpec)
     });
     counts[cantSpec.id] = 1;
     let sequence = 1;
