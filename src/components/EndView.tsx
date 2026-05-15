@@ -186,12 +186,29 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
               strokeDasharray="3 3"
               opacity={0.35}
             />
-            {/* Small red label in the top-left of the SVG explaining
-                the annulus, mirrored on the right side as a "−Nmm Ø"
-                callout so the cost shows up as a number, not just a
-                visual. Placed inside the padded margin so it doesn't
-                collide with planks even when the log fills the
-                canvas. */}
+            {/* Inline label sitting just above the dashed red ring's
+                topmost point so the sawyer can read the ring's
+                meaning without hunting for it in the legend. The
+                white halo (paint-order: stroke) keeps it legible if
+                the ring overlaps an outer plank trim indicator. */}
+            <text
+              x={cx}
+              y={cy - rStraight - 4}
+              fontSize={10}
+              fontWeight={600}
+              fill="#c01d10"
+              stroke="#ffffff"
+              strokeWidth={2.5}
+              textAnchor="middle"
+              style={{ paintOrder: 'stroke' }}
+            >
+              straight-log Ø
+            </text>
+            {/* Small red label in the top-left of the SVG with the
+                numeric cost: actual sweep input and the resulting
+                diameter shrink. Placed inside the padded margin so
+                it doesn't collide with planks even when the log
+                fills the canvas. */}
             <text
               x={pad / 2 + 2}
               y={pad / 2 + 2}
@@ -857,7 +874,10 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
             and dashed style match the faded red ring drawn in the
             SVG above. */}
         {sweep > 0 && (
-          <span className="inline-flex items-center gap-1.5">
+          <span
+            className="inline-flex items-center gap-1.5"
+            title="Where the design circle would be on a straight log. The annulus between this ring and the dark dashed design circle is what curvature costs you in usable diameter."
+          >
             <span
               className="inline-block w-3 h-3 rounded-full"
               style={{
@@ -867,7 +887,7 @@ export function EndView({ plan, remainingPlanks, blade, size = 560 }: Props) {
               }}
               aria-hidden
             />
-            sweep cost ({(2 * sweep).toFixed(0)} mm Ø)
+            straight-log Ø (−{(2 * sweep).toFixed(0)} mm)
           </span>
         )}
       </div>

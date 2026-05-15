@@ -5,6 +5,17 @@ import type { ConeState } from '../state/usePlan';
 interface Props {
   cone: ConeState;
   log: LogInput;
+  /**
+   * Current log rotation in degrees, CCW positive (matches
+   * `plan.rotationDeg`). Reserved for future use — the figure is a
+   * schematic curvature indicator that intentionally renders the
+   * bow at full magnitude regardless of cross-section rotation, so
+   * rotating the log doesn't make the bow shrink to zero at 90° /
+   * 270° (which would visually read as "the curve disappeared").
+   *
+   * Optional / undefined defaults to 0.
+   */
+  rotationDeg?: number;
 }
 
 /**
@@ -33,7 +44,7 @@ interface Props {
  * telling the sawyer to ALSO lower the support would
  * over-compensate.
  */
-export function ConeBanner({ cone, log }: Props) {
+export function ConeBanner({ cone, log, rotationDeg = 0 }: Props) {
   const state: 'active' | 'noDrop' | 'bedFlat' | 'resolved' = cone.resolved
     ? 'resolved'
     : cone.bedFlat
@@ -49,11 +60,27 @@ export function ConeBanner({ cone, log }: Props) {
   const shell = 'rounded-lg border px-3 py-2 text-sm min-h-[52px] flex items-center';
   const body = 'flex items-center gap-2.5 flex-wrap w-full';
 
+  // The side-view figure used to render only in the `active` (drop-
+  // needed) state. With sweep handling added, the same figure also
+  // serves as a curvature indicator — and a sawyer rotating a bowed
+  // log naturally expects to see the bow track the rotation here.
+  // So: when the log has any sweep we render the figure in EVERY
+  // cone state, threading the rotation through; only the surrounding
+  // banner copy/colour changes per state. For straight logs the
+  // figure-less neutral banner is preserved (no need for a side-view
+  // when there's nothing axis-related to show).
+  const curved = sweepMm(log) > 0;
+
   if (state === 'active') {
     return (
       <div className={`${shell} border-amber-400 bg-amber-50`}>
         <div className={body}>
-          <ConeFigure variant="active" log={log} rootDropMm={cone.rootDropMm} />
+          <ConeFigure
+            variant="active"
+            log={log}
+            rootDropMm={cone.rootDropMm}
+            rotationDeg={rotationDeg}
+          />
           <span className="text-amber-800">
             Lower root-side support by{' '}
             <span className="font-bold tabular-nums text-amber-900">
@@ -74,6 +101,37 @@ export function ConeBanner({ cone, log }: Props) {
       : state === 'bedFlat'
         ? 'Log rests on a flat cut face — the taper is already compensated at this rotation, so no further drop is needed here.'
         : 'Measured diameters match (or root is smaller) — no support drop needed yet.';
+
+  // Curved log + cone-OK: render the neutral banner WITH the figure
+  // so the sawyer can still see the bow rotate as they spin the log.
+  // Uses the `noDrop` figure variant (no red drop arrow) and a
+  // muted accent so it reads as informational rather than action-
+  // required.
+  if (curved) {
+    return (
+      <div
+        className={`${shell} border-forest-300 bg-forest-50`}
+        title={tooltip}
+      >
+        <div className={body}>
+          <ConeFigure
+            variant="noDrop"
+            log={log}
+            rootDropMm={0}
+            rotationDeg={rotationDeg}
+          />
+          <span className="font-medium text-forest-800">Cone resolved</span>
+          <span className="text-forest-700 hidden sm:inline text-xs">
+            — bow follows the log rotation.
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Straight log + cone-OK: keep the original compact, figure-less
+  // neutral banner. There's nothing axis-related to illustrate so
+  // the figure would just take up space.
   return (
     <div
       className={`${shell} border-forest-300 bg-forest-50`}
@@ -95,14 +153,11 @@ export function ConeBanner({ cone, log }: Props) {
 /* ------------------------------------------------------------------ */
 
 /**
- * `active` = amber accent + drop arrow under the root support.
- * `noDrop` = grey accent, no arrow, log drawn near-horizontal.
- *
- * Only the `active` variant is used by the current banner — the
- * no-drop / bed-flat states collapsed into a single compact card
- * without the figure. The `'noDrop'` case is kept in the union so
- * the figure is still available if a future redesign wants to
- * re-introduce it inside the neutral banner.
+ * `active` = amber accent + drop arrow under the root support, used
+ *   when a positive root-drop is needed.
+ * `noDrop` = grey accent, no arrow, log drawn near-horizontal — used
+ *   for the curved-log informational banner (bow rotates with the
+ *   log, no action required).
  */
 type Variant = 'active' | 'noDrop';
 
@@ -110,6 +165,17 @@ interface FigureProps {
   variant: Variant;
   log: LogInput;
   rootDropMm: number;
+  /**
+   * Log rotation in degrees, CCW positive. Reserved for future use:
+   * the figure is a schematic curvature indicator that always renders
+   * the bow at full magnitude pointing up, regardless of rotation,
+   * because projecting by cos(rotation) would collapse the visible
+   * bow to zero at 90° / 270° and confuse the sawyer (the log is
+   * still bowed, the bow just points into / out of the page). The
+   * prop is kept threaded so a future redesign can use it without
+   * changing the call sites.
+   */
+  rotationDeg?: number;
 }
 
 /**
@@ -141,7 +207,7 @@ interface FigureProps {
  * Nothing in this figure is meant to be measurable — it's a
  * proportional schematic so the banner state reads at a glance.
  */
-function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
+function ConeFigure({ variant, log, rootDropMm, rotationDeg: _rotationDeg = 0 }: FigureProps) {
   // Grown from the earlier 96×36 since the banner no longer carries
   // a "Cone compensation:" label — the figure now claims that space.
   // All downstream sizes (logPath, support blocks, drop arrow, pith
@@ -190,6 +256,18 @@ function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
   // we render that as a quadratic bow in the side view (peak at the
   // halfway point) which is a fair approximation of a circular-arc
   // sweep at small offsets.
+  //
+  // The figure is a small schematic indicator, not a precision side-
+  // view: it always renders the bow at full magnitude pointing up
+  // ("horns up"), independent of the cross-section rotation. Earlier
+  // versions projected the bow by cos(rotation) so a 90° rotation
+  // collapsed the figure to a straight log — geometrically correct
+  // (the bow now points into the page) but visually misleading,
+  // because a sawyer with a curved log expects to keep seeing the
+  // curve indicator regardless of which face is currently up. We
+  // accept the schematic licence in exchange for unambiguous
+  // communication. The `rotationDeg` prop is still threaded through
+  // for future use but no longer scales the bow.
   const sweepFigPx = sweepMm(log) * mmPerPx * scale;
   // Bow exaggeration — see the longer comment near `bowFactor`. We
   // compute it here so it can also size the SVG headroom.
@@ -197,8 +275,8 @@ function ConeFigure({ variant, log, rootDropMm }: FigureProps) {
   const sweepDrawPx = sweepFigPx * bowExaggeration;
 
   // Figure height: 40 px is the straight-log baseline, plus headroom
-  // for the bow apex so a horns-up arch never clips the top edge of
-  // the SVG when sweep is large.
+  // for the bow apex so the arch never clips the top edge of the
+  // SVG when sweep is large.
   const H = 40 + Math.ceil(sweepDrawPx);
 
   // Supports share one y baseline in both active and noDrop variants:

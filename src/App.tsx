@@ -159,7 +159,7 @@ export default function App() {
               Controls (below) shows the drop number so the sawyer sees
               it right next to the blade height; this banner keeps the
               tilted-log figure for spatial context. */}
-          <ConeBanner cone={cone} log={plan.log} />
+          <ConeBanner cone={cone} log={plan.log} rotationDeg={plan.rotationDeg} />
           <Controls
             rotation={plan.rotationDeg}
             onRotateBy={rotateBy}
